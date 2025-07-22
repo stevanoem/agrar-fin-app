@@ -1,0 +1,19 @@
+.env
+
+venv/
+
+# Python bytecode i cache
+__pycache__/
+*.pyc
+
+# Google API credentials i tokeni
+*.json
+
+.streamlit/secrets.toml
+
+# Logovi
+logovi/
+*.log
+
+# Fajlovi za lokalno čuvanje
+fajlovi/
