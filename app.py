@@ -436,10 +436,10 @@ else:
                     )
                 
             except FileNotFoundError:
-                st.error("PDF fajl nije pronađen. Molimo pokrenite analizu ponovo.")
+                st.error("TXT fajl nije pronađen. Molimo pokrenite analizu ponovo.")
                 logger.error(f"TXT fajl nije pronađen na putanji: {st.session_state.get('ai_comment_path')}")
 
-        st.write(f"Klijent: {st.session_state['client_name']}")
+        #st.write(f"Klijent: {st.session_state['client_name']}")
         # st.write(f"Komentar AI: {st.session_state['ai_comment']}")
 
     
