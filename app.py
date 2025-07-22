@@ -126,6 +126,7 @@ else:
         st.session_state['log_uploaded'] = False
         st.session_state['file_error'] =''
         st.session_state['openai_error']=''
+        st.session_state['upload_in_progress'] = False
         logger.info("Session state inicijalizovan. Aplikacija čeka fajl.")
 
     # --- KONTROLA TOKA APLIKACIJE ---
@@ -169,7 +170,12 @@ else:
 
         st.success(f"Fajl '{st.session_state['original_file_name']}' je spreman za analizu.")
 
-        if st.button('Pokreni analizu'):
+        if not st.session_state.get('upload_in_progress', False):
+            if st.button('Pokreni analizu'):
+                st.session_state['upload_in_progress'] = True
+                st.rerun()
+        else:
+            #  upload_in_progress postavljen
             creds = google_drive_auth(logger)
             if creds:
                 drive_folder_id = st.secrets["google_drive_folder"]["folder_id"]
@@ -180,11 +186,11 @@ else:
                     st.rerun()
                 else:
                     st.error("Upload fajla nije uspeo.")
-                    st.session_state['current_stage'] = 'file_uploaded'
+                    st.session_state['upload_in_progress'] = False  # Resetuj
             else:
                 st.error("Nije uspela autentifikacija za Google Drive.")
-                st.session_state['current_stage'] = 'file_uploaded'
-                
+                st.session_state['upload_in_progress'] = False
+                        
 
     # --- FAZA 3: ANALIZA U TOKU ---
     elif st.session_state['current_stage'] == 'analysis_in_progress':
@@ -442,5 +448,6 @@ else:
             #Resetovanje stanja
             st.session_state['current_stage'] = 'waiting_for_file'
             st.session_state['log_uploaded'] = False
+            st.session_state['upload_in_progress'] = False 
             logger.info("Pokretanje nove analize.")
             st.rerun()
