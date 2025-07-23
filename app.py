@@ -33,54 +33,46 @@ def hesh_pass(lozinka: str) -> str:
     return sha256.hexdigest()
 
 # TODO: enkriptuj nove sifre i ubaci u .toml
-def check_password(): 
-    """ True ako je šifra tačna."""
+def login_form():
+    """Prikazuje login formu i proverava kredencijale."""
+    
     st.title("Prijava")
     password = st.text_input("Unesite pristupnu šifru:", type="password")
 
     if st.button("Potvrdi"):
-        if password:
-            try:
-                # u hex
-                entered_password_hex = hesh_pass(password)
-                # Preuzmi tačnu hex šifru iz st.secrets
-                correct_password_hex1 = st.secrets["auth1"]["password_hex"]
-                correct_password_hex2 = st.secrets["auth2"]["password_hex"]
-                correct_password_hex3 = st.secrets["auth3"]["password_hex"]
-
-                if entered_password_hex == correct_password_hex1:
-                    st.session_state["authenticated"] = True
-                    st.session_state['user'] = 'Emilija'
-                    # st.rerun() - stranica se odmah osvezi i prikaze app
-                    st.rerun()
-                elif entered_password_hex == correct_password_hex2:
-                    st.session_state["authenticated"] = True
-                    st.session_state['user'] = 'Stefan'
-                    # st.rerun() - stranica se odmah osvezi i prikaze app
-                    st.rerun()
-                elif entered_password_hex == correct_password_hex3:
-                    st.session_state["authenticated"] = True
-                    st.session_state['user'] = 'Ana'
-                    # st.rerun() - stranica se odmah osvezi i prikaze app
-                    st.rerun()
-                else:
-                    st.error("Pristupna šifra nije tačna.")
-            except KeyError:
-                st.error("Greška u konfiguraciji: 'auth.password_hex' nije pronađen u secrets.toml.")
-                return False
-        else:
+        if not password:
             st.warning("Molimo unesite šifru.")
-    return False
+            return # Prekida se izvršavanje ako nema sifre
 
-# --- GLAVNI DEO APLIKACIJE ---
+        try:
+            # Ucitaj sve korisnike i njihove hesirane sifre
+            users_db = st.secrets["users"]
+            
+            # Heširaj unetu šifru samo jednom
+            entered_password_hex = hesh_pass(password)
+            
+            # Prolazi kroz sve korisnike u bazi
+            for username, correct_password_hex in users_db.items():
+                if entered_password_hex == correct_password_hex:
+                    # Ako se sifra poklopi, postavi stanje sesije i prekini
+                    st.session_state["authenticated"] = True
+                    st.session_state['user'] = username
+                    st.rerun() 
 
+            # Ako petlja prodje sve korisnike i ne nadje poklapanje
+            st.error("Pristupna šifra nije tačna.")
+
+        except KeyError:
+            st.error("Greška u konfiguraciji: Sekcija [users] nije pronađena u secrets.toml.")
+        except Exception as e:
+            st.error(f"Došlo je do neočekivane greške: {e}")
+
+# Glavni deo aplikacije
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
-    st.session_state['user'] = ''
 
-# Ako korisnik nije autorizovan, prikaži ekran za prijavu
 if not st.session_state["authenticated"]:
-    check_password()
+    login_form()
 else:
     # --- LOGGING SETTINGS ---
 
@@ -93,12 +85,12 @@ else:
 
             log_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-            # Stream handler za prikaz u Streamlit Cloud logovima
+            # Stream handler 
             stream_handler = logging.StreamHandler(sys.stdout)
             stream_handler.setFormatter(log_formatter)
             logger.addHandler(stream_handler)
 
-            # File handler za lokalni log koji ćeš slati na Google Drive
+            # File handler 
             file_handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
             file_handler.setFormatter(log_formatter)
             logger.addHandler(file_handler)
