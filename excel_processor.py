@@ -78,10 +78,15 @@ def to_JSON(file_path):
   df_osnovne_informacije = df_osnovne_informacije.dropna()
   #print(df_osnovne_informacije)
   osnovne_informacije_json= {}
-  osnovne_informacije_json['scoring'] = df_osnovne_informacije.iloc[0, 0]
-  osnovne_informacije_json['iznosEUR'] = df_osnovne_informacije.iloc[1, 0]
-  osnovne_informacije_json['naziv_komitenta'] = df_osnovne_informacije.iloc[2, 0]
-  osnovne_informacije_json['"status_pravnog_lica"'] = df_osnovne_informacije.iloc[3, 0].replace('\xa0', '')
+  if len(df_osnovne_informacije.iloc[0, 0]) > 3:
+    osnovne_informacije_json['naziv_komitenta'] = df_osnovne_informacije.iloc[0, 0]
+    osnovne_informacije_json['"status_pravnog_lica"'] = df_osnovne_informacije.iloc[1, 0].replace('\xa0', '')
+  else:
+     osnovne_informacije_json['scoring'] = df_osnovne_informacije.iloc[0, 0]
+     osnovne_informacije_json['iznosEUR'] = df_osnovne_informacije.iloc[1, 0]
+     osnovne_informacije_json['naziv_komitenta'] = df_osnovne_informacije.iloc[2, 0]
+     osnovne_informacije_json['"status_pravnog_lica"'] = df_osnovne_informacije.iloc[3, 0].replace('\xa0', '')
+
   
 #   osnovne_informacije_json['maticni_broj'] = re.search(r"Matični broj:\s*(\d+)", df_osnovne_informacije.iloc[4, 0]).group(1)
 #   osnovne_informacije_json['pib'] = re.search(r"PIB:\s*(\d+)", df_osnovne_informacije.iloc[4, 0]).group(1)
@@ -108,8 +113,10 @@ def to_JSON(file_path):
   print("Obrada poslovanja po godinama...")
   h = find_header(file_path, sheet_names[0], "A", (11, 19), "Godina")
   #print(h)
-  df_poslovanje = pd.read_excel(file_path, sheet_name=sheet_names[0], usecols="A:E", skiprows=h-1, nrows=7, engine='openpyxl', header=0)
+  df_poslovanje = pd.read_excel(file_path, sheet_name=sheet_names[0], skiprows=h-1, nrows=7, engine='openpyxl', header=0)
   df_poslovanje = df_poslovanje.astype(object).where(pd.notnull(df_poslovanje), None)
+  df_poslovanje = df_poslovanje.dropna(axis=1, how='all')
+  print(df_poslovanje)
   poslovanje_json = df_poslovanje.to_dict(orient='records')
   # lista metrika po godinama ->  struktura po godinama
   poslovanje_po_godinama = {}
@@ -274,7 +281,8 @@ def to_JSON(file_path):
   zuti_redovi_excel = find_yellow_rows(file_path)
   df_fin = pd.read_excel(file_path, sheet_name='Fin', engine='openpyxl', header=None)
   df_fin = df_fin.astype(object).where(pd.notnull(df_fin), None)
-  n_years = 3
+  #print(df_fin.shape[1])
+  n_years = min(3, df_fin.shape[1] - 1)
   fin_json = {}
   years_row_idx = 3
   years = df_fin.iloc[years_row_idx].dropna().tolist()
@@ -291,7 +299,7 @@ def to_JSON(file_path):
     selected_years = years[-n_years:]
 
     n_cols = df_block.shape[1]
-    df_final = df_block.iloc[:, [0] + list(range(n_cols - 4, n_cols))]
+    df_final = df_block.iloc[:, [0] + list(range(n_cols - (n_years + 1), n_cols))]
 
     # Postavi nazive kolona
     header = ['naziv'] + selected_years + ['zuti_pokazatelj']
