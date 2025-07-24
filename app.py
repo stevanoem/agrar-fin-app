@@ -376,7 +376,7 @@ else:
             except Exception as e:
                 logger.error(f"Neočekivana greška tokom analize: {e}")
                 st.error("Došlo je do neočekivane greške tokom analize. Pokušajte ponovo.")
-                st.session_state['current_stage'] = 'file_uploaded'
+                st.session_state['current_stage'] = 'waiting_for_file'
                 st.rerun()
 
     # --- FAZA 4: ANALIZA ZAVRŠENA, PRIKAZ REZULTATA ---
