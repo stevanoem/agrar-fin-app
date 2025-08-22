@@ -148,9 +148,17 @@ def to_JSON(file_path):
 
   # blokada
   print("Obrada blokada...")
-  h = find_header(file_path, sheet_names[1], "A", (13, 18))
-  blokada_od2010 = pd.read_excel(file_path, sheet_name=sheet_names[1], usecols="A:A", skiprows=h-1, nrows=1, engine='openpyxl', header=None).iloc[0,0]
-  final_json['blokade_od_2010'] = blokada_od2010
+  h = find_header(file_path, sheet_names[1], "A", (13, 18), "Blokade računa")
+  if h == -1:
+    h = find_header(file_path, sheet_names[1], "A", (13, 18))
+    blokada_od2010 = pd.read_excel(file_path, sheet_name=sheet_names[1], usecols="A:A", skiprows=h-1, nrows=1, engine='openpyxl', header=None).iloc[0,0]
+    final_json['blokade_od_2010'] = blokada_od2010
+  else:
+    df_blokada = pd.read_excel(file_path, sheet_name=sheet_names[1], skiprows=h,usecols="A:D", nrows=1, engine='openpyxl', header=0)
+    df_blokada = df_blokada.astype(str)
+    print(df_blokada)
+    final_json['blokade_od_2010'] = df_blokada.to_dict(orient='records')
+  
 
   # uvoz i izvoz
   print("Obrada uvoza i izvoza...")
@@ -265,6 +273,7 @@ def to_JSON(file_path):
   # otvorene_stavke_json = otvorene_stavke.to_dict(orient='records')
   # otvorene_stavke_filtered = [row for row in otvorene_stavke_json if row['Sektor'].lower() != 'grand total']
   # final_json['otvorene_stavke'] = otvorene_stavke_filtered
+  final_json['saradnja_sektori_rsd'] = {}
 
   # finansije
   print("Obrada finansije...")
@@ -342,12 +351,15 @@ def generate_AIcomment(prompt, key):
   # Inicijalizuj klijenta
   client = OpenAI(api_key=key)  # Preporuka: koristi os.environ
 
-
+  system_content = """
+    You are an expert AI Credit Risk Analyst.
+    Your task is to carefully analyze the provided client JSON data and generate a professional, ready-to-use "AI Comment" in business Serbian for a human credit risk analyst.
+  """
   # Poziv modela (GPT-4.1)
   response = client.chat.completions.create(
       model="gpt-4.1",
       messages=[
-          {"role": "system", "content": "Ti si kreditni analiticar."},
+          {"role": "system", "content": system_content},
           {"role": "user", "content": prompt}
 
       ],

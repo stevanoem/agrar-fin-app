@@ -222,41 +222,64 @@ else:
 
                         **INPUT DATA DESCRIPTION (For your internal processing only):**
 
-                        *   saradnja_sektori_rsd: Data on historical cooperation. This is the **KEY** to determine the analysis path. **If this field is missing, the analysis will follow PATH B.**
-                        *   finansije: Detailed financial statements. The zuti_pokazatelj key marks indicators of highest importance.
-                        *   Other fields: blokade_od_2010, ugovori etc.
+                        *   saradnja_sektori_rsd: Data on historical cooperation. This is the **KEY** to determine the analysis path. **If this field is an empty object ([]), the analysis will follow PATH B.**
+                        *   poslovanje_po_godinama_osnovno: yearly business metrics; all amounts in **000 RSD**
+                        *   finansije: Detailed financial statements. All values are expressed in **thousands of RSD (000 RSD)**. The zuti_pokazatelj key marks indicators of highest importance.
+                        *   blokade_od_2010: account block info; indicates whether blocked, period if applicable, and amount
+                        *   ugovori: contracts
+                        *   uvoz: inport data; financial values in EUR
+                        *   izvoz: export data; financial values in EUR
+                        *   Other fields: apr_zabeleske etc.
 
-                        **ANALYSIS GUIDELINES & HIERARCHICAL DECISION LOGIC:**
+                       **ANALYSIS GUIDELINES & HIERARCHICAL DECISION LOGIC (Based on expert instructions)**
 
-                        **STEP 1: Check for Universal "No-Go" Conditions**
-                        *(The following lead to an immediate limit of 0 RSD, unless strongly justified otherwise.)*
-                        *   No valid collateral (contract, promissory note, or insurance).
-                        *   Blocked account(s) in the past 2–3 years.
-                        *   Negative net working capital for two consecutive years.
+                            **STEP 1: Check for Universal "No-Go" Conditions (Limit = 0 RSD)**
+                            **(These are absolute rules. If any are true, propose a 0 RSD limit and state the reason clearly. Do not proceed to other steps.)**
+                            *   The client has a **Poslovni gubitak (Operating Loss)** in the most recent year.
+                            *   There were any account **blockades (blokade)** in the last 3 years.
+                            *   **Neto obrtna sredstva (Net Working Capital)** are negative for two consecutive years.
+                            *   There is no valid collateral mentioned in the `ugovori` section (e.g., no general contract or promissory notes/menice).
 
-                        **STEP 2: Determine Client Type and Analysis Path**
-                        *(Based on saradnja_sektori_rsd data.)*
-                        *   If **strong cooperation history** exists → Follow **PATH A: KNOWN CLIENT**.
-                        *   If this field is **missing** → Follow **PATH B: NEW / LAPSED CLIENT**.
+                            **STEP 2: Determine Client Type and Analysis Path**
+                            *   If `saradnja_sektori_rsd` is empty or has minimal data → Follow **PATH B: NEW CLIENT**.
+                            *   If significant cooperation history exists → Follow **PATH A: KNOWN CLIENT**.
 
-                        ---
+                            ---
 
-                        **PATH A: KNOWN CLIENT ANALYSIS**
-                        *   **Principle:** Strong historical cooperation is the primary factor.
-                        *   Analyze business volume and payment discipline, citing specific numbers in parentheses.
-                        *   Financials should be interpreted in the context of the existing relationship.
-                        *   Credit limit can go up to **5% of annual realized revenue**.
+                            **PATH A: KNOWN CLIENT ANALYSIS**
+                            *(This logic remains the same as before)*
+                            *   Principle: Strong historical cooperation is the primary factor.
+                            *   Analyze business volume and payment discipline, citing specific numbers.
+                            *   Credit limit can go up to 5% of annual realized revenue.
 
-                        ---
+                            ---
 
-                        **PATH B: NEW / LAPSED CLIENT ANALYSIS**
-                        *   **Principle:** Use conservative and strict financial analysis.
-                        *   Focus on high-impact indicators. Every claim must be backed by values in parentheses.
-                        *   **Carefully check liquidity:**
-                            *   Current ratio (Opšta likvidnost) > 2
-                            *   Quick ratio (Brza likvidnost) > 1
-                        *   **Typical limit:** **1–2% of latest annual revenue**, or a starter limit of **600,000–1,000,000 RSD** for new firms without reports.
+                            **PATH B: NEW CLIENT ANALYSIS (Strict Financial Approach)**
+                            **Principle:** The credit limit for a new client is based on a conservative percentage of their most recent annual revenue, adjusted based on a holistic financial risk assessment and standard starting amounts.
 
+                            **B1: Risk Factor Assessment**
+                            *   Analyze the overall financial picture, paying special attention to these key indicators:
+                                *   **Red Flags:** Is the number of employees zero? Are revenues in a significant decline? Is the Z-test indicating "bankrotstvo"? Are liquidity ratios far below the recommended levels (Current Ratio < 2, Quick Ratio < 1)?
+                                *   **Positive Signs:** Is the company large and well-known? Are all key financial indicators stable or growing?
+
+                            **B2: Credit Limit Calculation - Decision Tree**
+                            *   **Guiding Principle:** The calculation is a balance between a percentage of revenue and standard limits. The standard starting limit for an average new client is **1,000,000 RSD**. The absolute minimum for a client not rejected is **600,000 RSD**.
+
+                            *   **Apply the Rules in This Order:**
+                                1.  **High Risk Client:** If the Risk Assessment (B1) revealed **multiple significant Red Flags** (e.g., declining revenue AND a "bankrotstvo" Z-test), the limit **MUST BE 600,000 RSD**.
+                                2.  **Exceptional Client:** If the client is **exceptionally large, stable, and financially sound** (e.g., well-known, high revenue, all indicators positive), you can propose a higher limit, calculated as **2-3% of revenue**.
+                                3.  **Standard New Client (All other cases):** For a standard new client who does not fit the high-risk or exceptional categories, calculate **1-2% of revenue**. The final proposed limit should be **anchored around the 1,000,000 RSD mark** as a safe and standard starting point. If the calculation results in a slightly different figure (e.g., 950,000 or 1,100,000), it is acceptable to round it to the nearest logical amount, often 1,000,000 RSD.
+
+                            **B3: Final Justification**
+                            *   In your explanation, you must state the percentage of revenue used for the calculation and justify why that specific percentage and final amount were chosen, linking it directly to the risks and strengths you identified in step B1.
+                            *   Example: "Predloženi limit od 1.000.000 RSD predstavlja oko 2% godišnjih prihoda (58.000.000 RSD). Ovaj standardni iznos za početak saradnje je adekvatan jer, iako kompanija nema gubitke, primećen je pad prihoda i broj zaposlenih je nula, što zahteva konzervativan pristup."
+
+                            ---
+
+                            **IMPORTANT INSTRUCTIONS FOR THE AI:**
+                            *   Treat the Z-test result of "bankrotstvo" as a serious risk factor that lowers the limit, but **NOT** as an automatic "No-Go" rule on its own.
+
+                    
                         ---
 
                         **STEP 3: FORMATTING THE FINAL "AI COMMENT"**
