@@ -347,7 +347,7 @@ def to_JSON(file_path):
   return final_json
 
 
-def generate_AIcomment(prompt, key):
+def generate_AIcomment1(prompt, key):
   # Inicijalizuj klijenta
   client = OpenAI(api_key=key)  # Preporuka: koristi os.environ
 
@@ -368,3 +368,21 @@ def generate_AIcomment(prompt, key):
 
   # Prikaz odgovora
   return response.choices[0].message.content
+
+def generate_AIcomment(prompt, key):
+  # Inicijalizuj klijenta
+  client = OpenAI(api_key=key)  # Preporuka: koristi os.environ
+
+  response = client.responses.create(
+      model = "gpt-5-2025-08-07",
+      input=prompt,
+      reasoning={
+          "effort": "high"
+      },
+      text={
+          "verbosity": "high"
+      },
+      max_output_tokens= 15000
+  )
+  
+  return response.output_text
