@@ -80,12 +80,14 @@ def to_JSON(file_path):
   osnovne_informacije_json= {}
   if len(df_osnovne_informacije.iloc[0, 0]) > 3:
     osnovne_informacije_json['naziv_komitenta'] = df_osnovne_informacije.iloc[0, 0]
-    osnovne_informacije_json['"status_pravnog_lica"'] = df_osnovne_informacije.iloc[1, 0].replace('\xa0', '')
+    osnovne_informacije_json['status_pravnog_lica'] = df_osnovne_informacije.iloc[1, 0].replace('\xa0', '')
+    osnovne_informacije_json['delatnost'] = df_osnovne_informacije.iloc[3, 0].split(':')[1]
   else:
      osnovne_informacije_json['scoring'] = df_osnovne_informacije.iloc[0, 0]
      osnovne_informacije_json['iznosEUR'] = df_osnovne_informacije.iloc[1, 0]
      osnovne_informacije_json['naziv_komitenta'] = df_osnovne_informacije.iloc[2, 0]
-     osnovne_informacije_json['"status_pravnog_lica"'] = df_osnovne_informacije.iloc[3, 0].replace('\xa0', '')
+     osnovne_informacije_json['status_pravnog_lica'] = df_osnovne_informacije.iloc[3, 0].replace('\xa0', '')
+     osnovne_informacije_json['delatnost'] = df_osnovne_informacije.iloc[5, 0].split(':')[1]
 
   
 #   osnovne_informacije_json['maticni_broj'] = re.search(r"Matični broj:\s*(\d+)", df_osnovne_informacije.iloc[4, 0]).group(1)
@@ -154,9 +156,14 @@ def to_JSON(file_path):
     blokada_od2010 = pd.read_excel(file_path, sheet_name=sheet_names[1], usecols="A:A", skiprows=h-1, nrows=1, engine='openpyxl', header=None).iloc[0,0]
     final_json['blokade_od_2010'] = blokada_od2010
   else:
-    df_blokada = pd.read_excel(file_path, sheet_name=sheet_names[1], skiprows=h,usecols="A:D", nrows=1, engine='openpyxl', header=0)
+    df_raw = pd.read_excel(file_path, sheet_name=sheet_names[1], skiprows=h,usecols="A:D", engine='openpyxl', header=0)
+    stop_index = df_raw[df_raw.iloc[:, 0].str.contains("Računi", na=False)].index[0]
+    df_blokada = df_raw.iloc[:stop_index].copy()
+
+    df_blokada.reset_index(drop=True, inplace=True)
+    df_blokada.dropna(how='all', inplace=True)
+    
     df_blokada = df_blokada.astype(str)
-    print(df_blokada)
     final_json['blokade_od_2010'] = df_blokada.to_dict(orient='records')
   
 
