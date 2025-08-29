@@ -224,9 +224,12 @@ def to_JSON(file_path):
             apr_zabeleske_filtered = apr_zabeleske_clean[~apr_zabeleske_clean['Tip'].isin(nezeljene_poruke)]
 
             if not apr_zabeleske_filtered.empty and 'Datum' in apr_zabeleske_filtered.columns:
-                apr_zabeleske_filtered['Datum'] = apr_zabeleske_filtered['Datum'].apply(
-                    lambda d: None if pd.isna(d) else d.strftime('%Y-%m-%d')
-                )
+                apr_zabeleske_filtered['Datum'] = pd.to_datetime(
+                      apr_zabeleske_filtered['Datum'], dayfirst=True,
+                      format="%d.%m.%Y",  # odgovara formatu 24.7.2024
+                      errors='coerce'
+                  ).dt.strftime('%Y-%m-%d')
+
                 final_json['apr_zabeleske'] = apr_zabeleske_filtered.to_dict(orient='records')
             else:
                 final_json['apr_zabeleske'] = None
@@ -351,7 +354,7 @@ def to_JSON(file_path):
   # final_json['osnovni_pokazatelji'] = pokazatelji_json
 
 
-  return final_json
+  return json.loads(json.dumps(final_json, ensure_ascii=False, default=str))
 
 
 def generate_AIcomment1(prompt, key):
