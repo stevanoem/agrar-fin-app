@@ -6,6 +6,8 @@ from datetime import date, datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from math import log10, floor
+
 from openpyxl.utils import column_index_from_string, get_column_letter
 # za proveru boje redova - zuti redovi su vazniji u fin listu
 from openpyxl import load_workbook
@@ -355,6 +357,24 @@ def to_JSON(file_path):
 
 
   return json.loads(json.dumps(final_json, ensure_ascii=False, default=str))
+
+
+def propose_credit_limit(prihod_rsd: float,
+                             a: float = 26.54,
+                             b: float = -2.46,
+                             lo: float = 0.1,
+                             hi: float = 3.0) -> dict:
+    """
+    Računa procenat i predlog kreditnog limita na osnovu godišnjeg prihoda.
+    """
+    if prihod_rsd <= 0:
+        raise ValueError("Prihod mora biti pozitivan broj")
+
+    pct = a + b * log10(prihod_rsd)
+    pct = max(lo, min(hi, pct))  # clipping
+
+    limit = prihod_rsd * pct / 100.0
+    return {"proc_limita": pct, "predlog_limit": int(limit)}
 
 
 def generate_AIcomment1(prompt, key):

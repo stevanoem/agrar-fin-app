@@ -12,7 +12,7 @@ import logging
 from openai import OpenAI
 from openai import OpenAIError
 
-from excel_processor import to_JSON, generate_AIcomment
+from excel_processor import to_JSON, propose_credit_limit, generate_AIcomment
 from google_drive_utils import upload_drive, google_drive_auth
 
 
@@ -199,7 +199,16 @@ else:
                 #st.write("Prikaz JSON sadržaja:")
                 #st.json(json_content_for_ai)
 
-                
+                year_data = json_content_for_ai["poslovanje_po_godinama_osnovno"]
+                mostrecent_year = max(year_data.keys())
+                revenue = year_data[mostrecent_year]["ukupni_prihodi"] * 1000
+                print(revenue)
+
+                limit = propose_credit_limit(revenue)
+                percentage = limit.get("proc_limita")
+                limit = limit.get("predlog_limit")
+                logger.info(f"Predloženi limit: {limit}, procenat: {percentage}")
+
                 client_name_from_json = json_content_for_ai.get("osnovne_informacije", {}).get("naziv_komitenta", "")
                 client_name = client_name_from_json
                     
@@ -247,38 +256,25 @@ else:
                                 * Newly founded companies - current year or last year: starting limit 600,000–1,000,000 RSD depending on financial indicators.
                                 * No financial reports available (established same year) → assign **600,000 RSD**.
                                 * Companies with sufficient financial history → proceed to B2. Else STEP 2.
-
                                 
                                 **B2: Starting Point**
-                                *   The starting point for the credit limit is **3% of the most recent year's Total Revenue (`Ukupni prihodi`)**.
+                                * At this step, use the proposed credit limit and percentage calculated by internal formula: 
+                                    * pct = a + b * log10(prihod_rsd)
+                                    * pct = max(lo, min(hi, pct))  # clipping
+                                    * limit = prihod_rsd * pct / 100.0
+                                    * **limit rsd = {limit}** and **percentage = {percentage}**
+                                * Important for AI: Do not mention internal percentages or formulas in the final comment. Focus on:
+                                    *Whether the proposed limit is reasonable given the client’s financial profile.
+                                    *Whether there are risks that should reduce it, or reasons to accept it.
 
-                                **B2.1: Hierarchical Risk-Based Penalties**
-                                *   Apply penalties sequentially according to the strict hierarchical order below.
-                                *   Stop applying penalties once the final percentage reaches the **minimum floor of 1%**.
-                                *   The final output must be fully deterministic. Always evaluate indicators in this exact order.
-                                *   Even if a penalty is not applied because the floor is reached, you must still list all identified risk factors in the "Ključni faktori rizika" section to provide a complete profile.
-
-                                **B2.2: Hierarchical List of Indicators and Penalties (Refined based on analyst feedback)**
-                                1.  **Operating Loss (`Poslovni gubitak`)**: The company has an operating loss. Based on duration. -> (-0.3% to -0.5%)
-                                2.  **Negative EBITDA**: If EBITDA (Earnings Before Interest, Taxes, Depreciation, and Amortization) is negative in the last year. → –0.4%
-                                3.  **Negative Net Working Capital (`Neto obrtna sredstva`)**: based on duration (-0.3% to -o.5%).
-                                4.  **Declining Business Revenue (`Poslovni prihodi`)**: If business revenues show a declining trend over the last 3 years. → **–0.5%**
-                                5.  **Negative Net Result (`Neto rezultat`)**: If the net result is negative (but operating result is positive). → **–0.3%**
-                                6.  **Imbalance of Receivables vs. Payables**: If Trade Payables (`Obaveze iz poslovanja`) are significantly higher than Trade Receivables (`Potraživanja po osnovu prodaje`) in the last year. → **–0.2%**
-                                7.  **Low Current Ratio (`Opšti racio likvidnosti`)**: If the ratio is below 2.0 in the last year. → **–0.2%**
-                                8.  **Low Quick Ratio (`Rigorozni racio likvidnosti`)**: If the ratio is below 1.0 in the last year. → **–0.2%**
-                                9.  **High Days Sales Outstanding (DSO)**: If DSO (`Prosecan broj dana naplate potrazivanja`) is above 120 days OR shows a significant increasing trend. → **–0.2%**
-                                10.  **High Leverage (`Koeficijent zaduženosti`)**: If the leverage ratio is above 0.7 OR shows a significant increasing trend. → **–0.2%**
-                                11.  **Declining Profitability (Operating Margin)**: If the operating profit margin (`Poslovni dobitak` / `Poslovni prihodi`) is in a clear declining trend. → **–0.1%**
-                                12.  **Other Red Flags (Informational, lower penalty)**: If Z-Test indicates "bankrotstvo" or "opasnost", or if the number of employees is zero for an established company. → **–0.1%**
-                                13.  **Account Blockades**: 
-                                     * Analyze the field 'blokade_od_2010' for historical account blockades.
-                                     * If the account is not currently blocked, calculate for each past blockade: Number of days blocked, Blocked amount, Year of the blockade.
-                                     * Assign a proportional warning or minor penalty based on these factors (longer duration, higher amounts, more recent years → higher risk).
-                                     * → Informational, lower penalty (–0.1%)
+                                * **If the AI considers the proposal should be adjusted, provide an alternative amount and a brief justification, but still without mentioning formulas or internal rules.**
+                                    * Historically, credit limits for similar clients have generally ranged between 1–3% of annual revenue.
+                                    * In practice, no client has ever received a limit exceeding 200 million RSD.
+                                    * AI should use this as background context to assess the reasonableness of the proposed limit, but must not mention percentages, historical ranges, or internal caps in the final output to the business user.
 
                                 **B3: Final Justification**
-                                *   In the "Predlog limita i obrazloženje" section, **do not show the step-by-step arithmetic** (e.g., "3% - 0.5% = 2.5%"). Instead, state the final calculated percentage and the exact credit limit. Then, provide a concise narrative justification.The justification should holistically explain that the percentage was determined after applying reductions due to specific, identified risk factors, and then list those risk factors without numbering them.
+                                * Present the proposed credit limit and indicate what percentage of the client’s annual revenue it represents. Frame this information in a professional business tone suitable for a human analyst, without mentioning internal calculations or formulas.
+                                * Provide a conservative business justification: write the recommendation in the tone a human analyst would use.
                                 *   Mention if the limit is conditional on obtaining collateral (e.g., "Predlog limita je uslovljen potpisivanjem ugovora i dobijanjem menica kao sredstva obezbeđenja.").
                                 *   If the calculated limit is lower than 600,000 RSD, then propose 600,000 RSD instead. In that case, calculate and state what percentage of revenue this amount represents, and include all identified risk factors in the justification.
                                 ---
@@ -317,86 +313,6 @@ else:
                                 ---
                             """
 
-                prompt_text1 = f"""
-                                You are an expert Credit Risk Analyst AI. Your task is to analyze the provided JSON data for a client and generate a professional "AI Comment" in Serbian, suitable for a human credit risk analyst.
-
-                                ==========================
-                                STEP 0: INPUT DATA DESCRIPTION
-                                ==========================
-                                - saradnja_sektori_rsd: historical cooperation; if empty → PATH B (new client)
-                                - poslovanje_po_godinama_osnovno: yearly business metrics (000 RSD)
-                                - finansije: detailed financial statements (000 RSD)
-                                - blokade_od_2010: account block info
-                                - ugovori: contracts
-                                - uvoz/izvoz: financial values in EUR
-                                - Other fields: apr_zabeleske etc.
-
-                                ==========================
-                                STEP 1: DETERMINISTIC RED FLAG COUNT
-                                ==========================
-                                - Count red flags strictly based on the **22 indicators** below (include Z-test as one flag):
-                                    1. Visina poslovnog dobitka/gubitka (negative EBIT/EBITDA)
-                                    2. Visina poslovnih prihoda/rashoda (declining revenue)
-                                    3. Vanbilansna aktiva/pasiva (high off-balance items)
-                                    4. Kratkoročne finansijske obaveze (high current liabilities)
-                                    5. Dugoročne obaveze (high long-term debt)
-                                    6. Odnos potraživanja i obaveza iz poslovanja (unfavorable DSO/DPO)
-                                    7. Gubitak iznad visine kapitala (loss > equity)
-                                    8. Osnovni kapital (low base capital)
-                                    9. Stalna imovina (low fixed assets)
-                                    10. Dani vezivanja obaveza prema dobavljačima (high DPO)
-                                    11. Dani vezivanja zaliha (high DSI)
-                                    12. Dani vezivanja potraživanja od kupaca (high DSO)
-                                    13. Ukupne finansijske obaveze (high total liabilities)
-                                    14. Koeficijent finansijske stabilnosti (low financial stability ratio)
-                                    15. Koeficijent zaduženosti (high leverage ratio)
-                                    16. Neto obrtni fond (negative net working capital)
-                                    17. Rigorozni racio likvidnosti (low stringent liquidity ratio)
-                                    18. Opšti racio likvidnosti (low current ratio)
-                                    19. Neto prinos na kapital (low return on equity)
-                                    20. EBITDA (negative)
-                                    21. EBITDA marža (low EBITDA margin)
-                                    22. Bruto marža na prodaju (low gross margin)
-                                - Apply hard limits based on total red flags:
-                                    | Red Flags | Credit Limit (RSD) |
-                                    |-----------|------------------|
-                                    | 0–2       | 1,000,000        |
-                                    | 3–4       | 950,000          |
-                                    | 5–9       | 800,000          |
-                                    | ≥10       | 600,000          |
-                                - Output the exact number as `LIMIT_RSD`. **Do not round or give ranges.**
-                                - Each of the 22 indicators must be counted exactly once. Do not double-count correlated metrics. For example, EBITDA marža and EBITDA are counted separately, but do not count the same negative EBITDA twice.
-                                - No-Go conditions (Limit = 0) override table:
-                                    * Operating loss in most recent year
-                                    * Account block in last 3 years
-                                    * Negative net working capital for 2 consecutive years
-
-                                ==========================
-                                STEP 2: GENERATE AI COMMENT
-                                ==========================
-                                - Use the red flag count from STEP 1 to justify the limit.
-                                - Structure output using business Serbian and include supporting data in parentheses.
-                                - Sections:
-                                    1. Tip klijenta i osnova za analizu
-                                    2. Ukupna procena (financial and risk overview, key numbers)
-                                    3. Ključni faktori rizika (list red flags with supporting numbers)
-                                    4. Pozitivni pokazatelji (list with supporting numbers)
-                                    5. Predlog limita i obrazloženje
-                                        - Must reference `LIMIT_RSD`
-                                        - Clearly explain why that limit is applied based on identified red flags and positive indicators
-
-                                ==========================
-                                IMPORTANT:
-                                ==========================
-                                - The output must be **deterministic**: same input → same red flag count → same limit.
-                                - Z-test result of "bankrotstvo" is counted as one red flag.
-                                - The AI Comment must include both the **exact credit limit** and **a full, human-readable explanation** with supporting numbers.
-                                - Do not create multiple versions or ranges for the limit.
-
-                                --- START OF CLIENT JSON DATA ---
-                                {json_content_for_ai}
-                                --- END OF CLIENT JSON DATA ---
-                                """
 
                 ai_comment = generate_AIcomment(prompt_text, API_KEY)
                 logger.info("AI komentar uspešno generisan.")
