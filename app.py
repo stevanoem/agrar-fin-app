@@ -2,25 +2,22 @@ import os
 import sys
 import shutil
 from datetime import datetime
-import pandas as pd
 import json
 import hashlib
+
+from openai import OpenAIError
 
 import streamlit as st
 import logging
 
-from openai import OpenAI
-from openai import OpenAIError
-
 from excel_processor import to_JSON, propose_credit_limit, generate_AIcomment
 from google_drive_utils import upload_drive, google_drive_auth
-
-
 
 LOCAL_OUTPUT_BASE_DIR = "output"
 LOG_PATH = os.path.join(LOCAL_OUTPUT_BASE_DIR, "app.log")
 os.makedirs(LOCAL_OUTPUT_BASE_DIR, exist_ok=True)
 API_KEY = st.secrets["api_keys"]["openai"]
+
 
 def hesh_pass(lozinka: str) -> str:
     # Pretvaramo lozinku u bajtove
@@ -32,38 +29,37 @@ def hesh_pass(lozinka: str) -> str:
     # Vraćamo heš u heksadecimalnom obliku (string)
     return sha256.hexdigest()
 
-# TODO: enkriptuj nove sifre i ubaci u .toml
+
 def login_form():
-    """Prikazuje login formu i proverava kredencijale."""
-    
+    """
+    Prikazuje login formu i proverava kredencijale.
+    """
     st.title("Prijava")
     password = st.text_input("Unesite pristupnu šifru:", type="password")
 
     if st.button("Potvrdi"):
         if not password:
             st.warning("Molimo unesite šifru.")
-            return # Prekida se izvršavanje ako nema sifre
+            return   # Prekida se izvršavanje ako nema sifre
 
         try:
             # Ucitaj sve korisnike i njihove hesirane sifre
             users_db = st.secrets["users"]
-            
             # Heširaj unetu šifru samo jednom
             entered_password_hex = hesh_pass(password)
-            
             # Prolazi kroz sve korisnike u bazi
             for username, correct_password_hex in users_db.items():
                 if entered_password_hex == correct_password_hex:
                     # Ako se sifra poklopi, postavi stanje sesije i prekini
                     st.session_state["authenticated"] = True
                     st.session_state['user'] = username
-                    st.rerun() 
+                    st.rerun()
 
             # Ako petlja prodje sve korisnike i ne nadje poklapanje
             st.error("Pristupna šifra nije tačna.")
 
         except KeyError:
-            st.error("Greška u konfiguraciji: Sekcija [users] nije pronađena u secrets.toml.")
+            st.error("Greska u konfiguraciji: Sekcija [users] nije pronadjena")
         except Exception as e:
             st.error(f"Došlo je do neočekivane greške: {e}")
 
@@ -83,14 +79,16 @@ else:
             logger.setLevel(logging.INFO)
             logger.propagate = False
 
-            log_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            log_formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                )
 
-            # Stream handler 
+            # Stream handler
             stream_handler = logging.StreamHandler(sys.stdout)
             stream_handler.setFormatter(log_formatter)
             logger.addHandler(stream_handler)
 
-            # File handler 
+            # File handler
             file_handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
             file_handler.setFormatter(log_formatter)
             logger.addHandler(file_handler)
@@ -116,8 +114,8 @@ else:
         st.session_state['original_file_name'] = ''
         st.session_state['timestamp'] = ''
         st.session_state['log_uploaded'] = False
-        st.session_state['file_error'] =''
-        st.session_state['openai_error']=''
+        st.session_state['file_error'] = ''
+        st.session_state['openai_error'] = ''
         st.session_state['upload_in_progress'] = False
         logger.info("Session state inicijalizovan. Aplikacija čeka fajl.")
 
@@ -129,7 +127,6 @@ else:
         if st.session_state.get('file_error'):
             st.error(st.session_state['file_error'])
             st.session_state['file_error'] = ''
-            
         uploaded_file = st.file_uploader(
             "Izaberi Excel fajl",
             type=["xls", "xlsx", "xlsm"]
@@ -138,7 +135,11 @@ else:
             temp_dir = 'temp_uploaded_files'
             st.session_state['timestamp'] = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             os.makedirs(temp_dir, exist_ok=True)
-            temp_file_path = os.path.join(temp_dir, st.session_state['timestamp'] +'_'+ st.session_state['user'] + '_' + uploaded_file.name)
+            temp_file_path = os.path.join(
+                temp_dir, st.session_state['timestamp'] +
+                '_' + st.session_state['user'] +
+                '_' + uploaded_file.name
+                )
 
             with open(temp_file_path, 'wb') as f:
                 f.write(uploaded_file.getbuffer())
@@ -147,9 +148,7 @@ else:
             st.session_state['uploaded_file_path'] = temp_file_path
             st.session_state['original_file_name'] = uploaded_file.name
             st.session_state['current_stage'] = 'file_uploaded'
-            
             logger.info(f"Fajl uspešno sačuvan: {uploaded_file.name} na putanji {temp_file_path}")
-            
             st.rerun()
 
 # TODO iskljuci dugme za pokretanje analize dok traje ubacivanje na drive
@@ -182,37 +181,27 @@ else:
             else:
                 st.error("Nije uspela autentifikacija za Google Drive.")
                 st.session_state['upload_in_progress'] = False
-                        
-
     # --- FAZA 3: ANALIZA U TOKU ---
     elif st.session_state['current_stage'] == 'analysis_in_progress':
         with st.spinner("Analiziram podatke i generišem izveštaj..."):
             try:
                 excel_file_path = st.session_state['uploaded_file_path']
-                
-
                 logger.info(f"Pokrenuta analiza, fajl: {excel_file_path}")
-
                 # --- LOGIKA ZA ANALIZU ---
                 json_content_for_ai = to_JSON(excel_file_path)
                 logger.info("JSON sadržaj uspešno generisan.")
-                #st.write("Prikaz JSON sadržaja:")
-                #st.json(json_content_for_ai)
-
+                # st.write("Prikaz JSON sadržaja:")
+                # st.json(json_content_for_ai)
                 year_data = json_content_for_ai["poslovanje_po_godinama_osnovno"]
                 mostrecent_year = max(year_data.keys())
                 revenue = year_data[mostrecent_year]["ukupni_prihodi"] * 1000
                 print(revenue)
-
                 limit = propose_credit_limit(revenue)
                 percentage = limit.get("proc_limita")
                 limit = limit.get("predlog_limit")
                 logger.info(f"Predloženi limit: {limit}, procenat: {percentage}")
-
                 client_name_from_json = json_content_for_ai.get("osnovne_informacije", {}).get("naziv_komitenta", "")
                 client_name = client_name_from_json
-                    
-
                 prompt_text = f"""
                            You are an expert Credit Risk Analyst AI. Your task is to analyze the provided JSON data for a client and generate a concise "AI Comment" **in Serbian** for a human credit risk analyst.
                            This comment should highlight key insights, potential risks, positive indicators, and any anomalies relevant to a credit decision.
@@ -258,7 +247,7 @@ else:
                                 * Companies with sufficient financial history → proceed to B2. Else STEP 2.
                                 
                                 **B2: Starting Point**
-                                * At this step, use the proposed credit limit and percentage calculated by internal formula: 
+                                * At this step, use the proposed credit limit and percentage calculated by internal formula:
                                     * pct = a + b * log10(prihod_rsd)
                                     * pct = max(lo, min(hi, pct))  # clipping
                                     * limit = prihod_rsd * pct / 100.0
@@ -312,73 +301,65 @@ else:
                                 {json_content_for_ai}
                                 ---
                             """
-
-
                 ai_comment = generate_AIcomment(prompt_text, API_KEY)
+                
+                #ai_comment = "PROBA"
                 logger.info("AI komentar uspešno generisan.")
 
                 ai_comment_output_base_dir = os.path.join(LOCAL_OUTPUT_BASE_DIR, "komentari")
                 ai_comment_firm_specific_dir = os.path.join(ai_comment_output_base_dir, client_name)
                 os.makedirs(ai_comment_firm_specific_dir, exist_ok=True)
-                ai_comment_local_file = os.path.join(ai_comment_firm_specific_dir, f'{st.session_state['timestamp'] +'_'+ st.session_state['user'] + '_' +  client_name}_ai_comment.txt')
+                ai_comment_local_file = os.path.join(
+                    ai_comment_firm_specific_dir,
+                    f'{st.session_state['timestamp'] + '_' + st.session_state['user'] + '_' + client_name}_ai_comment.txt'
+                )
 
                 with open(ai_comment_local_file, 'w', encoding='utf-8') as f_comment:
                     f_comment.write(ai_comment)
 
                 os.makedirs(os.path.join(LOCAL_OUTPUT_BASE_DIR, 'json'), exist_ok=True)
-                json_output_path = os.path.join(LOCAL_OUTPUT_BASE_DIR, 'json', f'{st.session_state['timestamp'] +'_'+ st.session_state['user'] + '_' + client_name}_data_for_ai.json')
+                json_output_path = os.path.join(
+                    LOCAL_OUTPUT_BASE_DIR,
+                    'json',
+                    f'{st.session_state['timestamp'] + '_' + st.session_state['user'] + '_' + client_name}_data_for_ai.json'
+                )
                 with open(json_output_path, 'w', encoding='utf-8') as json_file:
                     json.dump(json_content_for_ai, json_file, ensure_ascii=False, indent=4)
 
                 st.session_state['ai_comment_path'] = ai_comment_local_file
-
-                
                 # --- Upload JSON i AI komentar na Google Drive ---
                 creds = google_drive_auth(logger)
                 if creds:
-                        # Upload JSON (.json)
-                        drive_folder_id = st.secrets["google_drive_folder"]["folder_id"]
-                        file_id = upload_drive(json_output_path, creds, drive_folder_id, logger)
-                        if file_id:
-                            st.success(f"Fajl uspešno uploadovan! ID: {file_id}")
-                            logger.info(f"JSON uspešno uploadovan na Google Drive. ID: {drive_folder_id }")
-                        else:
-                            st.error("Upload fajla nije uspeo.")
-                        
-                        # Upload AI komentara (.txt)
-                        drive_folder_id = st.secrets["google_drive_folder"]["folder_id"]
-                        file_id = upload_drive(ai_comment_local_file, creds, drive_folder_id, logger)
-                        if file_id:
-                            st.success(f"Fajl ai kom uspešno uploadovan! ID: {file_id}")
-                            logger.info(f"AI komentar uspešno uploadovan na Google Drive. ID: {drive_folder_id }")
-                        else:
-                            st.error("Upload fajla nije uspeo.")
-
-                            
+                    # Upload JSON (.json)
+                    drive_folder_id = st.secrets["google_drive_folder"]["folder_id"]
+                    file_id = upload_drive(json_output_path, creds, drive_folder_id, logger)
+                    if file_id:
+                        st.success(f"Fajl uspešno uploadovan! ID: {file_id}")
+                        logger.info(f"JSON uspešno uploadovan na Google Drive. ID: {drive_folder_id}")
+                    else:
+                        st.error("Upload fajla nije uspeo.")
+                    # Upload AI komentara (.txt)
+                    drive_folder_id = st.secrets["google_drive_folder"]["folder_id"]
+                    file_id = upload_drive(ai_comment_local_file, creds, drive_folder_id, logger)
+                    if file_id:
+                        st.success(f"Fajl ai kom uspešno uploadovan! ID: {file_id}")
+                        logger.info(f"AI komentar uspešno uploadovan na Google Drive. ID: {drive_folder_id}")
+                    else:
+                        st.error("Upload fajla nije uspeo.")
                 else:
                     st.error("Autentifikacija za Google Drive nije uspela. Fajlovi nisu uploadovani.")
                     logger.error("Google Drive autentifikacija nije uspela.")
-                    
-
-                #short_ai_text_for_pdf = shorter_text(ai_comment)
-                #print(short_ai_text_for_pdf)
-                
-                #pdf_output_dir = os.path.join('output', 'pdf')
-                #os.makedirs(pdf_output_dir, exist_ok=True)
-                #pdf_file_path = os.path.join(pdf_output_dir, f'{st.session_state["client_name"]}_kreditna_analiza.pdf')
-
-                #generate_PDF(pdf_file_path, excel_file_path, short_ai_text_for_pdf)
+                # short_ai_text_for_pdf = shorter_text(ai_comment)
+                # print(short_ai_text_for_pdf)
+                # pdf_output_dir = os.path.join('output', 'pdf')
+                # os.makedirs(pdf_output_dir, exist_ok=True)
+                # pdf_file_path = os.path.join(pdf_output_dir, f'{st.session_state["client_name"]}_kreditna_analiza.pdf')
+                # generate_PDF(pdf_file_path, excel_file_path, short_ai_text_for_pdf)
                 logger.info(f"TXT uspešno generisan: {ai_comment_local_file}")
-                
-
                 # Saving result
                 st.session_state['ai_comment'] = ai_comment
-                #st.session_state['pdf_path'] = pdf_file_path
                 st.session_state['current_stage'] = 'analysis_done'
-            
                 st.rerun()
-
-            
             except OpenAIError as oe:
                 logger.error(f"Greška prilikom poziva OpenAI API-ja: {oe}")
                 st.error("Došlo je do problema sa AI servisom (OpenAI). Pokušajte ponovo kasnije.")
@@ -388,9 +369,20 @@ else:
 
             except (ValueError, KeyError, AttributeError, TypeError, IndexError) as ex:
                 logger.error(f"Greška prilikom čitanja fajla: {ex}")
-                st.error("Fajl nije u ispravnom formatu. Molimo izaberite ispravan fajl.")
+
+                error_str = str(ex).lower()
+                if 'fin' in error_str and 'prazan' in error_str:
+                        # Prikazujemo specifičnu, jasnu poruku korisniku
+                        user_message = f"Greška: {ex} Molimo popunite ga podacima i pokušajte ponovo."
+                        st.error(user_message)
+                        st.session_state['file_error'] = user_message
+                else:
+                        # Ako nije ta greška, prikazujemo generičku poruku
+                        user_message = "Fajl nije u ispravnom formatu. Molimo izaberite ispravan fajl."
+                        st.error(user_message)
+                        st.session_state['file_error'] = user_message
+        
                 st.session_state['current_stage'] = 'waiting_for_file'
-                st.session_state['file_error'] = "Fajl nije u ispravnom formatu. Molimo izaberite ispravan fajl."
                 st.rerun()
 
             except Exception as e:
@@ -419,11 +411,8 @@ else:
                         DRIVE_FOLDER_ID = None
 
                     if DRIVE_FOLDER_ID:
-                        log_temp_path = f"{st.session_state['timestamp'] +'_'+ st.session_state['user']}_app.log"
-
-                    
+                        log_temp_path = f"{st.session_state['timestamp'] + '_' + st.session_state['user']}_app.log"
                         shutil.copy(LOG_PATH, log_temp_path)
-
                         log_drive_id = upload_drive(log_temp_path, creds, DRIVE_FOLDER_ID, logger)
                         if log_drive_id:
                             logger.info(f"Log fajl uspešno uploadovan na Google Drive. ID: {log_drive_id}")
@@ -433,10 +422,9 @@ else:
                         os.remove(log_temp_path)
                         st.session_state['log_uploaded'] = True
 
-            #Ciscenje log fajla
+            # Ciscenje log fajla
             open(LOG_PATH, 'w').close()
             logger.info("Log fajl uspešno ispražnjen.")
-            
             try:
                 # Open the generated TXT file and provide download button
                 with open(st.session_state['ai_comment_path'], "rb") as file:
@@ -446,20 +434,15 @@ else:
                         file_name=os.path.basename(st.session_state['ai_comment_path']),
                         mime="application/txt"
                     )
-                
             except FileNotFoundError:
                 st.error("TXT fajl nije pronađen. Molimo pokrenite analizu ponovo.")
                 logger.error(f"TXT fajl nije pronađen na putanji: {st.session_state.get('ai_comment_path')}")
 
-        #st.write(f"Klijent: {st.session_state['client_name']}")
-        # st.write(f"Komentar AI: {st.session_state['ai_comment']}")
-
-    
         if st.button("Pokreni novu analizu"):
 
-            #Resetovanje stanja
+            # Resetovanje stanja
             st.session_state['current_stage'] = 'waiting_for_file'
             st.session_state['log_uploaded'] = False
-            st.session_state['upload_in_progress'] = False 
+            st.session_state['upload_in_progress'] = False
             logger.info("Pokretanje nove analize.")
             st.rerun()

@@ -7,19 +7,17 @@ from google.auth.transport.requests import Request
 
 import streamlit as st
 
-SCOPES = ['https://www.googleapis.com/auth/drive.file']  # dozvola za upload fajlova
+# dozvola za upload fajlova
+SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 
 def google_drive_auth(logger):
     creds = None
-
-    
     try:
         token_info = st.secrets.get("google_drive", {}).get("token", None)
         credentials_info = st.secrets.get("google_drive", {}).get("credentials", None)
 
         if token_info and credentials_info:
-            
             creds = Credentials(
                 token=token_info.get("token"),
                 refresh_token=token_info.get("refresh_token"),
@@ -46,7 +44,8 @@ def google_drive_auth(logger):
                 logger.error(f"Greška pri osvežavanju tokena: {e}")
                 creds = None
         else:
-            # posto nema fajla sa credentials, napraviti flow iz client_id i client_secret
+            # posto nema fajla sa credentials
+            # napraviti flow iz client_id i client_secret
             try:
                 flow = InstalledAppFlow.from_client_config({
                     "installed": {
@@ -96,7 +95,9 @@ def google_drive_auth2(logger):
 
     return creds
 
+
 def upload_drive(file_path, creds, folder_id, logger):
+
     try:
         service = build('drive', 'v3', credentials=creds)
         file_metadata = {

@@ -26,7 +26,12 @@ def get_cell_value(df, cell_address):
 
 
 def find_header(file_path, sheet_name, column, range, keyword=""):
-  df = pd.read_excel(file_path, sheet_name=sheet_name, usecols=f"{column}:{column}", skiprows=range[0]-1, nrows=range[1]-range[0], engine='openpyxl', header=None)
+  try:
+    df = pd.read_excel(file_path, sheet_name=sheet_name, usecols=f"{column}:{column}", skiprows=range[0]-1, nrows=range[1]-range[0], engine='openpyxl', header=None)
+  except Exception as e:
+    print(e)
+    print("KOLONA")
+    return -1
   #print(df)
   if not df.empty:
     if keyword != "":
@@ -154,7 +159,7 @@ def to_JSON(file_path):
   print("Obrada blokada...")
   h = find_header(file_path, sheet_names[1], "A", (13, 18), "Blokade računa")
   if h == -1:
-    h = find_header(file_path, sheet_names[1], "A", (13, 18))
+    h = find_header(file_path, sheet_names[1], "A", (14, 18))
     blokada_od2010 = pd.read_excel(file_path, sheet_name=sheet_names[1], usecols="A:A", skiprows=h-1, nrows=1, engine='openpyxl', header=None).iloc[0,0]
     final_json['blokade_od_2010'] = blokada_od2010
   else:
@@ -303,34 +308,40 @@ def to_JSON(file_path):
   df_fin = pd.read_excel(file_path, sheet_name='Fin', engine='openpyxl', header=None)
   df_fin = df_fin.astype(object).where(pd.notnull(df_fin), None)
   #print(df_fin.shape[1])
-  n_years = min(3, df_fin.shape[1] - 1)
-  fin_json = {}
-  years_row_idx = 3
-  years = df_fin.iloc[years_row_idx].dropna().tolist()
-  zuti_redovi_df = [r - 1 for r in zuti_redovi_excel]
+  if df_fin.empty:
+    error_message = f'Obavezni list "Fin" je prazan.'
+    print(error_message)
+    raise ValueError(error_message)
+  else:
+    n_years = min(3, df_fin.shape[1] - 1)
+    fin_json = {}
+    years_row_idx = 3
+    years = df_fin.iloc[years_row_idx].dropna().tolist()
+    zuti_redovi_df = [r - 1 for r in zuti_redovi_excel]
+    df_fin = df_fin.iloc[:, :(len(years)+1)]
 
-  for blok, (start_row, end_row) in fin_blocks.items():
-    df_block = df_fin.iloc[start_row:end_row+1].copy()
+    for blok, (start_row, end_row) in fin_blocks.items():
+      df_block = df_fin.iloc[start_row:end_row+1].copy()
 
-    #  redovi "žuti"
-    df_block['zuti_pokazatelj'] = df_block.index.isin(zuti_redovi_df)
+      #  redovi "žuti"
+      df_block['zuti_pokazatelj'] = df_block.index.isin(zuti_redovi_df)
 
 
-    # poslednjih n godina
-    selected_years = years[-n_years:]
+      # poslednjih n godina
+      selected_years = years[-n_years:]
 
-    n_cols = df_block.shape[1]
-    df_final = df_block.iloc[:, [0] + list(range(n_cols - (n_years + 1), n_cols))]
+      n_cols = df_block.shape[1]
+      df_final = df_block.iloc[:, [0] + list(range(n_cols - (n_years + 1), n_cols))]
 
-    # Postavi nazive kolona
-    header = ['naziv'] + selected_years + ['zuti_pokazatelj']
-    df_final.columns = header
+      # Postavi nazive kolona
+      header = ['naziv'] + selected_years + ['zuti_pokazatelj']
+      df_final.columns = header
 
-    # Pretvori u listu rečnika
-    fin_json[blok] = df_final.to_dict(orient='records')
+      # Pretvori u listu rečnika
+      fin_json[blok] = df_final.to_dict(orient='records')
 
-  # proveriti da li je u 000 rsd
-  final_json['finansije'] = fin_json
+    # proveriti da li je u 000 rsd
+    final_json['finansije'] = fin_json
 
   # ugovori
   print("Obrada ugovori...")
