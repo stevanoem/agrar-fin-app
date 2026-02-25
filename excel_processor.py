@@ -425,5 +425,13 @@ def generate_AIcomment(prompt, key):
       },
       max_output_tokens= 15000
   )
+
+  usage = response.usage
+
+  usage_data = {
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "total_tokens": usage.total_tokens
+    }
   
-  return response.output_text
+  return response.output_text, usage_data

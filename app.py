@@ -12,11 +12,14 @@ import logging
 
 from excel_processor import to_JSON, propose_credit_limit, generate_AIcomment
 from google_drive_utils import upload_drive, google_drive_auth
+from prompt_processor import render_prompt
 
 LOCAL_OUTPUT_BASE_DIR = "output"
 LOG_PATH = os.path.join(LOCAL_OUTPUT_BASE_DIR, "app.log")
 os.makedirs(LOCAL_OUTPUT_BASE_DIR, exist_ok=True)
 API_KEY = st.secrets["api_keys"]["openai"]
+
+PROMPT_PATH = os.path.join("prompts", "template_v1.txt")
 
 
 def hesh_pass(lozinka: str) -> str:
@@ -28,7 +31,30 @@ def hesh_pass(lozinka: str) -> str:
     sha256.update(lozinka_bytes)
     # Vraćamo heš u heksadecimalnom obliku (string)
     return sha256.hexdigest()
+def initialize_logger():
+        logger = logging.getLogger("FinAiApp")
 
+        if not logger.handlers:
+            logger.setLevel(logging.INFO)
+            logger.propagate = False
+
+            log_formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                )
+
+            # Stream handler
+            stream_handler = logging.StreamHandler(sys.stdout)
+            stream_handler.setFormatter(log_formatter)
+            logger.addHandler(stream_handler)
+
+            # File handler
+            file_handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
+            file_handler.setFormatter(log_formatter)
+            logger.addHandler(file_handler)
+
+            logger.info("--- Aplikacija pokrenuta, loger konfigurisan ---")
+
+        return logger
 
 def login_form():
     """
@@ -62,7 +88,7 @@ def login_form():
             st.error("Greska u konfiguraciji: Sekcija [users] nije pronadjena")
         except Exception as e:
             st.error(f"Došlo je do neočekivane greške: {e}")
-
+# ********************
 # Glavni deo aplikacije
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -70,33 +96,26 @@ if "authenticated" not in st.session_state:
 if not st.session_state["authenticated"]:
     login_form()
 else:
+    # --- PRIVREMENA BLOKADA ZA PUSH ---
+    st.title('Analiza kreditnog rizika')
+    st.error("### 🛠️ Izmene u toku...")
+    st.info("Sistem je trenutno u fazi ažuriranja. Molimo vas za strpljenje, funkcionalnost će biti ponovo uspostavljena uskoro.")
+    
+    if st.button("Odjavi se"):
+        st.session_state["authenticated"] = False
+        st.rerun()
+        
+    st.stop() # Sve ispod ove linije se ignoriše na serveru
+    # ----------------------------------
+# ****************
+# Glavni deo aplikacije
+#if "authenticated" not in st.session_state:
+#    st.session_state["authenticated"] = False
+
+#if not st.session_state["authenticated"]:
+#    login_form()
+#else:
     # --- LOGGING SETTINGS ---
-
-    def initialize_logger():
-        logger = logging.getLogger("FinAiApp")
-
-        if not logger.handlers:
-            logger.setLevel(logging.INFO)
-            logger.propagate = False
-
-            log_formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-                )
-
-            # Stream handler
-            stream_handler = logging.StreamHandler(sys.stdout)
-            stream_handler.setFormatter(log_formatter)
-            logger.addHandler(stream_handler)
-
-            # File handler
-            file_handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
-            file_handler.setFormatter(log_formatter)
-            logger.addHandler(file_handler)
-
-            logger.info("--- Aplikacija pokrenuta, loger konfigurisan ---")
-
-        return logger
-
     # --- Initialization ---
     if 'logger' not in st.session_state:
         st.session_state['logger'] = initialize_logger()
@@ -202,106 +221,15 @@ else:
                 logger.info(f"Predloženi limit: {limit}, procenat: {percentage}")
                 client_name_from_json = json_content_for_ai.get("osnovne_informacije", {}).get("naziv_komitenta", "")
                 client_name = client_name_from_json
-                prompt_text = f"""
-                           You are an expert Credit Risk Analyst AI. Your task is to analyze the provided JSON data for a client and generate a concise "AI Comment" **in Serbian** for a human credit risk analyst.
-                           This comment should highlight key insights, potential risks, positive indicators, and any anomalies relevant to a credit decision.
-                           Your language should be professional and direct, avoiding unnecessary jargon explanations or raw data markers in the final comment unless specifically instructed.
-                                **CRITICAL OUTPUT RULES:**
-                                1.  **NO TECHNICAL JARGON:** Write in professional business Serbian. DO NOT mention JSON field names. Describe the meaning of the data in business terms.
-                                2.  **PROVIDE SUPPORTING DATA:** Every analytical statement must be backed by key data points in parentheses.
-                                3.  **SOURCE OF TRUTH FOR DATA:** For all financial calculations (revenue, profit, ratios, etc.), you MUST exclusively use the data from the detailed financial statements located under the "finansije" key. IGNORE the summary data in "poslovanje_po_godinama_osnovno" for calculations, as it may be inconsistent.
-                                4.  **DO NOT ROUND:** Do not round the final credit limit. Provide the exact calculated number.
+                vars = {"limit": limit, "percentage": percentage, "client_name": client_name, "client_json_data": json_content_for_ai}
+                prompt_text = render_prompt(PROMPT_PATH, vars)
+                st.write(prompt_text)
+                logger.info(f"Prompt uspesno renderovan \n\n: {prompt_text}")
 
-                                **INPUT DATA DESCRIPTION (For your internal processing only):**
-                                *   The JSON contains multiple sections with client data.
-                                *   **CRITICAL:** All financial values in the `poslovanje_po_godinama_osnovno` and `finansije` sections are in **THOUSANDS of RSD (000 RSD)**. When you present these numbers in your report, you must correctly state them (e.g., a value of `5719839` should be presented as "5.719.839 hiljada RSD" or "5.719.839.000 RSD").
-                                *   `saradnja_sektori_rsd`: Data on historical cooperation. An empty object  means it's a new client.
-                                *   `blokade_od_2010`: Information on account blockades.
-                                *   `uvoz` / `izvoz`: Financial values are in EUR.
+                ai_comment, usage = generate_AIcomment(prompt_text, API_KEY)
 
-                                ---
+                logger.info(f"Token usage: total={usage['total_tokens']}, input={usage['input_tokens']}, output={usage['output_tokens']}")
 
-                                **STEP 1: ANALYSIS GUIDELINES & HIERARCHICAL DECISION LOGIC**
-
-                                **STEP 1.1: Universal "No-Go" Conditions (Limit = 0 RSD)**
-                                *   First, check for these absolute deal-breakers. If any are true for the most recent year, assign a **0 RSD limit**, state the reason clearly, and STOP the analysis.
-                                    1.  **Ongoing Account Blockade (`Blokade`)**: There is an active account blockade.
-
-                                **STEP 1.2: Determine Client Type and Analysis Path**
-                                *   If the `saradnja_sektori_rsd` object is empty -> **PATH B: NEW CLIENT**.
-                                *   If there is significant data in `saradnja_sektori_rsd` -> **PATH A: EXISTING CLIENT**.
-
-                                ---
-
-                                **PATH A: EXISTING CLIENT ANALYSIS**
-                                *   (This path is for future development). The primary basis for the limit is the history of cooperation and payment discipline. The limit can be higher, potentially up to 5% of realized revenue with us, if payment is orderly.
-
-                                ---
-
-                                **PATH B: NEW CLIENT ANALYSIS (Strict Deterministic Approach)**
-
-                                **B1: Newly Established Companies**
-                                * Check field `osnivanje_firme` -> `datum_osnivanja`
-                                * Newly founded companies - current year or last year: starting limit 600,000–1,000,000 RSD depending on financial indicators.
-                                * No financial reports available (established same year) → assign **600,000 RSD**.
-                                * Companies with sufficient financial history → proceed to B2. Else STEP 2.
-                                
-                                **B2: Starting Point**
-                                * At this step, use the proposed credit limit and percentage calculated by internal formula:
-                                    * pct = a + b * log10(prihod_rsd)
-                                    * pct = max(lo, min(hi, pct))  # clipping
-                                    * limit = prihod_rsd * pct / 100.0
-                                    * **limit rsd = {limit}** and **percentage = {percentage}**
-                                * Important for AI: Do not mention internal percentages or formulas in the final comment. Focus on:
-                                    *Whether the proposed limit is reasonable given the client’s financial profile.
-                                    *Whether there are risks that should reduce it, or reasons to accept it.
-
-                                * **If the AI considers the proposal should be adjusted, provide an alternative amount and a brief justification, but still without mentioning formulas or internal rules.**
-                                    * Historically, credit limits for similar clients have generally ranged between 1–3% of annual revenue.
-                                    * In practice, no client has ever received a limit exceeding 200 million RSD.
-                                    * AI should use this as background context to assess the reasonableness of the proposed limit, but must not mention percentages, historical ranges, or internal caps in the final output to the business user.
-
-                                **B3: Final Justification**
-                                * Present the proposed credit limit and indicate what percentage of the client’s annual revenue it represents. Frame this information in a professional business tone suitable for a human analyst, without mentioning internal calculations or formulas.
-                                * Provide a conservative business justification: write the recommendation in the tone a human analyst would use.
-                                *   Mention if the limit is conditional on obtaining collateral (e.g., "Predlog limita je uslovljen potpisivanjem ugovora i dobijanjem menica kao sredstva obezbeđenja.").
-                                *   If the calculated limit is lower than 600,000 RSD, then propose 600,000 RSD instead. In that case, calculate and state what percentage of revenue this amount represents, and include all identified risk factors in the justification.
-                                ---
-
-                                **STEP 2: FORMATTING THE FINAL "AI COMMENT"**
-                                Structure your output using the format below. All findings must use business language and include supporting values in parentheses.
-
-                                    **Tip klijenta i osnova za analizu**
-                                    (Indicate the client’s name and type – “Poznat” or “Novi”. Specify what the analysis is based on.)
-
-                                    **Ukupna procena**
-                                    (Provide a high-level summary of the client’s financial and risk profile. Key numbers should appear in parentheses.)
-
-                                    ---
-
-                                    **Ključni faktori rizika**
-                                    (List format. Each point must state a risk and include data in parentheses.)
-                                    *   Example: Likvidnost: Opšti racio likvidnosti je pao ispod preporučenog nivoa (trenutno 1.5, pad sa 2.14 u 2022), a brza likvidnost je na samoj granici (1.01).
-
-                                    ---
-
-                                    **Pozitivni pokazatelji**
-                                    (List format. Each point must state a strength and include data in parentheses.)
-
-                                    ---
-
-                                    **Predlog limita i obrazloženje**
-                                    **Predlaže se limit od [Iznos] RSD.**
-
-                                    **Obrazloženje:**
-                                    (Provide detailed justification with supporting data.)
-                                    *   Example: "Limit od 5 miliona RSD predstavlja manje od 0.25% godišnje realizacije (ukupna realizacija ~2.3 milijarde RSD u 2024), što je konzervativno u odnosu na preporučeni raspon za poznate klijente."
-
-                                --- START OF CLIENT JSON DATA ---
-                                {json_content_for_ai}
-                                ---
-                            """
-                ai_comment = generate_AIcomment(prompt_text, API_KEY)
                 
                 #ai_comment = "PROBA"
                 logger.info("AI komentar uspešno generisan.")
