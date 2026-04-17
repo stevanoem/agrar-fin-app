@@ -12,7 +12,6 @@ You are an expert Credit Risk Analyst AI. Your task is to analyze the provided J
                                 *   **CRITICAL:** All financial values in the `poslovanje_po_godinama_osnovno` and `finansije` sections are in **THOUSANDS of RSD (000 RSD)**. When you present these numbers in your report, you must correctly state them (e.g., a value of `5719839` should be presented as "5.719.839 hiljada RSD" or "5.719.839.000 RSD").
                                 *   `saradnja_sektori_rsd`: Data on historical cooperation. An empty object  means it's a new client.
                                 *   `blokade_od_2010`: Information on account blockades.
-                                *   `uvoz` / `izvoz`: Financial values are in EUR.
 
                                 ---
 

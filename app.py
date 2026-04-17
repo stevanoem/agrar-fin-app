@@ -1,10 +1,11 @@
 import os
 import sys
 import shutil
-from datetime import datetime
+from datetime import datetime, date
 import json
 import hashlib
 
+from numpy._core.fromnumeric import matrix_transpose
 from openai import OpenAIError
 
 import streamlit as st
@@ -13,13 +14,27 @@ import logging
 from excel_processor import to_JSON, propose_credit_limit, generate_AIcomment
 from google_drive_utils import upload_drive, google_drive_auth
 from prompt_processor import render_prompt
+from helpers import (
+    get_operating_revenue,
+    get_assets,
+    get_n_emp,
+    get_founding_date,
+    parse_analysis_date_from_filename,
+)
+from decision_engine_v2 import decide_final_limit_v2
+from rules import (
+    evaluate_financial_rules,
+    save_rules_report,
+    decide_final_limit,
+    detect_revenue_anomalies,
+)
 
 LOCAL_OUTPUT_BASE_DIR = "output"
 LOG_PATH = os.path.join(LOCAL_OUTPUT_BASE_DIR, "app.log")
 os.makedirs(LOCAL_OUTPUT_BASE_DIR, exist_ok=True)
 API_KEY = st.secrets["api_keys"]["openai"]
 
-PROMPT_PATH = os.path.join("prompts", "template_v1.txt")
+PROMPT_PATH = os.path.join("prompts", "template_v2.txt")
 
 
 def hesh_pass(lozinka: str) -> str:
@@ -90,31 +105,31 @@ def login_form():
             st.error(f"Došlo je do neočekivane greške: {e}")
 # ********************
 # Glavni deo aplikacije
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
-
-if not st.session_state["authenticated"]:
-    login_form()
-else:
-    # --- PRIVREMENA BLOKADA ZA PUSH ---
-    st.title('Analiza kreditnog rizika')
-    st.error("### 🛠️ Izmene u toku...")
-    st.info("Sistem je trenutno u fazi ažuriranja. Molimo vas za strpljenje, funkcionalnost će biti ponovo uspostavljena uskoro.")
-    
-    if st.button("Odjavi se"):
-        st.session_state["authenticated"] = False
-        st.rerun()
-        
-    st.stop() # Sve ispod ove linije se ignoriše na serveru
-    # ----------------------------------
-# ****************
-# Glavni deo aplikacije
 #if "authenticated" not in st.session_state:
 #    st.session_state["authenticated"] = False
 
 #if not st.session_state["authenticated"]:
 #    login_form()
 #else:
+    # --- PRIVREMENA BLOKADA ZA PUSH ---
+#    st.title('Analiza kreditnog rizika')
+#    st.error("### 🛠️ Izmene u toku...")
+#    st.info("Sistem je trenutno u fazi ažuriranja. Molimo vas za strpljenje, funkcionalnost će biti ponovo uspostavljena uskoro.")
+    
+#    if st.button("Odjavi se"):
+#        st.session_state["authenticated"] = False
+#        st.rerun()
+        
+#    st.stop() # Sve ispod ove linije se ignoriše na serveru
+    # ----------------------------------
+# ****************
+# Glavni deo aplikacije
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    login_form()
+else:
     # --- LOGGING SETTINGS ---
     # --- Initialization ---
     if 'logger' not in st.session_state:
@@ -128,6 +143,7 @@ else:
         st.session_state['current_stage'] = 'waiting_for_file'
         st.session_state['ai_comment'] = ''
         st.session_state['ai_comment_path'] = ''
+        st.session_state['rules_report_path'] = ''
         st.session_state['client_name'] = ''
         st.session_state['uploaded_file_path'] = ''
         st.session_state['original_file_name'] = ''
@@ -211,35 +227,128 @@ else:
                 logger.info("JSON sadržaj uspešno generisan.")
                 # st.write("Prikaz JSON sadržaja:")
                 # st.json(json_content_for_ai)
+
+                founding_date = get_founding_date(json_content_for_ai)
+                analysis_date = parse_analysis_date_from_filename(st.session_state['original_file_name'])
+                if analysis_date is None:
+                    analysis_date = date.today()
+                    logger.warning(
+                        "Datum analize nije pronađen u nazivu fajla '%s'; koristi se današnji datum %s.",
+                        st.session_state['original_file_name'],
+                        analysis_date.isoformat(),
+                    )
+                client_name = json_content_for_ai.get("osnovne_informacije", {}).get("naziv_komitenta", "")
+                analysis_file_prefix = f"{st.session_state['timestamp']}_{st.session_state['user']}_{client_name}"
+
                 year_data = json_content_for_ai["poslovanje_po_godinama_osnovno"]
                 mostrecent_year = max(year_data.keys())
-                revenue = year_data[mostrecent_year]["ukupni_prihodi"] * 1000
-                print(revenue)
-                limit = propose_credit_limit(revenue)
-                percentage = limit.get("proc_limita")
-                limit = limit.get("predlog_limit")
-                logger.info(f"Predloženi limit: {limit}, procenat: {percentage}")
-                client_name_from_json = json_content_for_ai.get("osnovne_informacije", {}).get("naziv_komitenta", "")
-                client_name = client_name_from_json
-                vars = {"limit": limit, "percentage": percentage, "client_name": client_name, "client_json_data": json_content_for_ai}
+
+                # Osnovni finansijski podaci
+                operating_revenue = get_operating_revenue(json_content_for_ai, mostrecent_year)
+                assets = get_assets(json_content_for_ai, mostrecent_year)
+                n_emp = get_n_emp(json_content_for_ai, mostrecent_year)
+
+                logger.info(
+                    f"Klijent: {client_name}, godina analize: {mostrecent_year}, "
+                    f"prihod={operating_revenue}, aktiva={assets}, zaposleni={n_emp}"
+                )
+
+                # Rules report za download / audit
+                rules_output_path = os.path.join(
+                    LOCAL_OUTPUT_BASE_DIR,
+                    "rules",
+                    f"{analysis_file_prefix}_financial_rules_report.md"
+                )
+
+                rules_report = evaluate_financial_rules(json_content_for_ai, str(mostrecent_year))
+                save_rules_report(
+                    rules_report,
+                    rules_output_path,
+                    file_format="md",
+                    company_name=client_name
+                )
+
+                # Finalna odluka o limitu
+                backup_decision_v1 = decide_final_limit(
+                    json_content_for_ai,
+                    str(mostrecent_year),
+                    founding_date,
+                    analysis_date,
+                )
+                final_decision = decide_final_limit_v2(
+                    json_content_for_ai,
+                    str(mostrecent_year),
+                    founding_date,
+                    analysis_date,
+                )
+
+                logger.info(f"Primary final decision (v2): {final_decision}")
+                logger.info(f"Backup final decision (v1): {backup_decision_v1}")
+
+                # Izvuci ključne vrednosti za prompt/UI
+                final_limit = final_decision.get("final_limit")
+                final_pct = final_decision.get("final_pct")
+                decision_type = final_decision.get("decision_type")
+                overall_risk = final_decision.get("overall_risk")
+
+                base_limit = final_decision.get("base_limit")
+                base_pct = final_decision.get("base_pct")
+                penalty_factor = final_decision.get("penalty_factor")
+                positive_factor = final_decision.get("positive_factor")
+                combined_score = final_decision.get("combined_score")
+
+                logger.info(
+                    f"Decision type={decision_type}, final_limit={final_limit}, final_pct={final_pct}, "
+                    f"base_limit={base_limit}, base_pct={base_pct}, penalty_factor={penalty_factor}, "
+                    f"positive_factor={positive_factor}, combined_score={combined_score}, overall_risk={overall_risk}"
+                )
+                apr_notes = json_content_for_ai.get("apr_zabeleske") or []
+                if apr_notes:
+                    apr_notes_status = "Postoje APR zabeleške i treba ih sažeto preneti u komentaru."
+                else:
+                    apr_notes_status = "Nema APR zabeleški u dostupnom izveštaju i to treba eksplicitno navesti u komentaru."
+
+                revenue_anomalies = detect_revenue_anomalies(
+                    json_content_for_ai, str(mostrecent_year)
+                )
+
+                vars = {
+                    "client_name": client_name,
+                    "client_json_data": json_content_for_ai,
+                    "final_decision": final_decision,
+                    "final_limit": final_limit,
+                    "final_pct": final_pct,
+                    "base_limit": base_limit,
+                    "base_pct": base_pct,
+                    "overall_risk": overall_risk,
+                    "apr_notes_status": apr_notes_status,
+                    "revenue_anomalies": revenue_anomalies,
+                }
                 prompt_text = render_prompt(PROMPT_PATH, vars)
-                st.write(prompt_text)
-                logger.info(f"Prompt uspesno renderovan \n\n: {prompt_text}")
 
+                #st.write(prompt_text)
+                logger.info("Prompt uspešno renderovan.")
+                st.session_state["rules_report_path"] = rules_output_path
+
+                print("FINAL DECISION")
+                print(final_decision)
+                print(f"konacni limit nakon analize: {final_limit} {final_pct}")
+
+                # AI KOMENTAR
                 ai_comment, usage = generate_AIcomment(prompt_text, API_KEY)
-
-                logger.info(f"Token usage: total={usage['total_tokens']}, input={usage['input_tokens']}, output={usage['output_tokens']}")
-
-                
-                #ai_comment = "PROBA"
-                logger.info("AI komentar uspešno generisan.")
+                logger.info(
+                    "AI komentar uspešno generisan. "
+                    f"Input tokens={usage.get('input_tokens')}, "
+                    f"output tokens={usage.get('output_tokens')}, "
+                    f"total tokens={usage.get('total_tokens')}"
+                )
 
                 ai_comment_output_base_dir = os.path.join(LOCAL_OUTPUT_BASE_DIR, "komentari")
                 ai_comment_firm_specific_dir = os.path.join(ai_comment_output_base_dir, client_name)
                 os.makedirs(ai_comment_firm_specific_dir, exist_ok=True)
                 ai_comment_local_file = os.path.join(
                     ai_comment_firm_specific_dir,
-                    f'{st.session_state['timestamp'] + '_' + st.session_state['user'] + '_' + client_name}_ai_comment.txt'
+                    f"{analysis_file_prefix}_ai_comment.txt"
                 )
 
                 with open(ai_comment_local_file, 'w', encoding='utf-8') as f_comment:
@@ -249,12 +358,15 @@ else:
                 json_output_path = os.path.join(
                     LOCAL_OUTPUT_BASE_DIR,
                     'json',
-                    f'{st.session_state['timestamp'] + '_' + st.session_state['user'] + '_' + client_name}_data_for_ai.json'
+                    f"{analysis_file_prefix}_data_for_ai.json"
                 )
                 with open(json_output_path, 'w', encoding='utf-8') as json_file:
                     json.dump(json_content_for_ai, json_file, ensure_ascii=False, indent=4)
 
+                
+
                 st.session_state['ai_comment_path'] = ai_comment_local_file
+                
                 # --- Upload JSON i AI komentar na Google Drive ---
                 creds = google_drive_auth(logger)
                 if creds:
@@ -274,6 +386,12 @@ else:
                         logger.info(f"AI komentar uspešno uploadovan na Google Drive. ID: {drive_folder_id}")
                     else:
                         st.error("Upload fajla nije uspeo.")
+                    #file_id = upload_drive(rules_output_path, creds, drive_folder_id, logger)
+                    #if file_id:
+                    #    st.success(f"Fajl rules report uspešno uploadovan! ID: {file_id}")
+                    #    logger.info(f"Rules report uspešno uploadovan na Google Drive. ID: {drive_folder_id}")
+                    #else:
+                    #    st.error("Upload rules report fajla nije uspeo.")
                 else:
                     st.error("Autentifikacija za Google Drive nije uspela. Fajlovi nisu uploadovani.")
                     logger.error("Google Drive autentifikacija nije uspela.")
@@ -365,6 +483,18 @@ else:
             except FileNotFoundError:
                 st.error("TXT fajl nije pronađen. Molimo pokrenite analizu ponovo.")
                 logger.error(f"TXT fajl nije pronađen na putanji: {st.session_state.get('ai_comment_path')}")
+            #try:
+            #    if st.session_state.get('rules_report_path'):
+             #       with open(st.session_state['rules_report_path'], "rb") as file:
+             #           st.download_button(
+              #              label="Preuzmi Rules Report (MD)",
+              #              data=file,
+              #              file_name=os.path.basename(st.session_state['rules_report_path']),
+              #              mime="text/markdown"
+              #          )
+            #    except FileNotFoundError:
+            #    st.error("Rules report fajl nije pronađen. Molimo pokrenite analizu ponovo.")
+            #    logger.error(f"Rules report fajl nije pronađen na putanji: {st.session_state.get('rules_report_path')}")
 
         if st.button("Pokreni novu analizu"):
 
@@ -372,5 +502,6 @@ else:
             st.session_state['current_stage'] = 'waiting_for_file'
             st.session_state['log_uploaded'] = False
             st.session_state['upload_in_progress'] = False
+            st.session_state['rules_report_path'] = ''
             logger.info("Pokretanje nove analize.")
             st.rerun()
