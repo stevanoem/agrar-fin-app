@@ -780,8 +780,8 @@ def evaluate_financial_rules(client_json, year, trend_years=3):
 
     company_size = company_type(
         get_n_emp(client_json, year),
-        get_operating_revenue(client_json, year) / EUR_RSD,
-        get_assets(client_json, year) / EUR_RSD,
+        _safe_ratio(get_operating_revenue(client_json, year), EUR_RSD),
+        _safe_ratio(get_assets(client_json, year), EUR_RSD),
     )
     print(f"Velicina firme: {company_size}")
 

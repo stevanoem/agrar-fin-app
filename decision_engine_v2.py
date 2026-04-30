@@ -178,22 +178,19 @@ def _build_core_assessment(results, revenue_rsd, current_ratio, quick_ratio, dso
         _append_reason(failures, "Odnos potraživanja i obaveza je nepovoljan.")
         score -= 3
 
+    # Opšti racio likvidnosti je JEDINA mera likvidnosti prema internoj politici risk tima.
+    # Rigorozni racio se ne koristi u oceni.
     liquidity_fail = 0
     liquidity_warn = 0
-    if current_ratio is not None and current_ratio < 1.2:
+    if current_ratio is not None and current_ratio < 1.0:
+        liquidity_fail += 2
+    elif current_ratio is not None and current_ratio < 1.2:
         liquidity_fail += 1
     elif current_ratio is not None and current_ratio < 1.5:
         liquidity_warn += 1
 
-    # Kod gotovinskog modela, quick ratio je veštački nizak zbog inventara, ne zbog naplatnih problema.
-    # CCC je dominiran ciklusom inventara, ne naplatom – ne penalizujemo ga za gotovinske firme.
-    if not structural_cash:
-        if quick_ratio is not None and quick_ratio < 0.9:
-            liquidity_fail += 1
-        elif quick_ratio is not None and quick_ratio < 1.0:
-            liquidity_warn += 1
-        if ccc is not None and ccc > 90:
-            liquidity_warn += 1
+    if ccc is not None and not structural_cash and ccc > 90:
+        liquidity_warn += 1
 
     if dso is not None and dpo is not None and dso - dpo > 30:
         liquidity_warn += 1
@@ -340,11 +337,11 @@ def _core_grade_from_score(score):
 
 def _baseline_pct_from_grade(core_grade):
     if core_grade == "strong":
-        return 3.0
-    if core_grade == "good":
         return 2.5
-    if core_grade == "mixed":
+    if core_grade == "good":
         return 2.0
+    if core_grade == "mixed":
+        return 1.5
     return 1.0
 
 
@@ -358,10 +355,11 @@ def decide_final_limit_v2(client_json, year, founding_date, analysis_date):
     assets_rsd = get_assets(client_json, year)
     n_emp = get_n_emp(client_json, year)
 
-    if revenue_rsd is not None and assets_rsd is not None and n_emp is not None:
-        client_size = company_type(n_emp, revenue_rsd / EUR_RSD, assets_rsd / EUR_RSD)
-    else:
-        client_size = rules_report.get("company_type", "small")
+    client_size = company_type(
+        n_emp,
+        revenue_rsd / EUR_RSD if revenue_rsd is not None else None,
+        assets_rsd / EUR_RSD if assets_rsd is not None else None,
+    )
 
     founding_year = founding_date.year if founding_date else None
     analysis_year = analysis_date.year if analysis_date else None
@@ -654,13 +652,14 @@ def decide_final_limit_v2(client_json, year, founding_date, analysis_date):
             and client_size != "micro"
         )
         if _is_strongly_capitalized:
-            adjusted_pct = max(adjusted_pct, 2.75)  # 2.75 → snap_pct = 3.0
+            adjusted_pct = max(adjusted_pct, 2.25)  # 2.25 → snap_pct = 2.5
 
-    final_pct = None if decision_type in {"manual_review", "weak_micro_client"} and recommendation != "approve_with_policy_controls" else snap_pct_to_policy_bucket(adjusted_pct) if adjusted_pct > 0 else 0.0
+    final_pct = None if decision_type == "manual_review" and recommendation != "approve_with_policy_controls" else snap_pct_to_policy_bucket(adjusted_pct) if adjusted_pct > 0 else 0.0
     final_limit = None
 
     if decision_type == "weak_micro_client":
-        final_limit = MIN_LIMIT_RSD
+        final_pct = snap_pct_to_policy_bucket(1.0)
+        final_limit = max(MIN_LIMIT_RSD, int(min(revenue_rsd * final_pct / 100.0, ABSOLUTE_LIMIT_CAP_RSD)))
     elif decision_type == "manual_review":
         final_limit = None
     elif recommendation == "advance_only":
