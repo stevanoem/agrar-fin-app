@@ -7,46 +7,47 @@ def convert_EUR(x):
   return float(x) / 117.5
 
 def company_type(zaposleni, poslovni_prihod_eur, aktiva_eur):
-    micro = 0
-    small = 0
-    mid = 0
-    big = 0
+    counts = {"micro": 0, "small": 0, "medium": 0, "large": 0}
+    observed_sizes = []
 
-    if zaposleni <= 10:
-        micro += 1
-    elif zaposleni <= 50:
-        small += 1
-    elif zaposleni <= 250:
-        mid += 1
-    else:
-        big += 1
-
-    if poslovni_prihod_eur <= 700000:
-        micro += 1
-    elif poslovni_prihod_eur <= 8000000:
-        small += 1
-    elif poslovni_prihod_eur <= 40000000:
-        mid += 1
-    else:
-        big += 1
-
-    if aktiva_eur <= 350000:
-        micro += 1
-    elif aktiva_eur <= 4000000:
-        small += 1
-    elif aktiva_eur <= 20000000:
-        mid += 1
-    else:
-        big += 1
-
-    if micro >= 2:
-        return "micro"
-    elif small >= 2:
-        return "small"
-    elif mid >= 2:
-        return "medium"
-    else:
+    def classify_metric(value, thresholds):
+        if value is None:
+            return None
+        for limit, size in thresholds:
+            if value <= limit:
+                return size
         return "large"
+
+    employee_size = classify_metric(
+        zaposleni,
+        [(10, "micro"), (50, "small"), (250, "medium")],
+    )
+    revenue_size = classify_metric(
+        poslovni_prihod_eur,
+        [(700000, "micro"), (8000000, "small"), (40000000, "medium")],
+    )
+    assets_size = classify_metric(
+        aktiva_eur,
+        [(350000, "micro"), (4000000, "small"), (20000000, "medium")],
+    )
+
+    for size in (employee_size, revenue_size, assets_size):
+        if size is None:
+            continue
+        counts[size] += 1
+        observed_sizes.append(size)
+
+    if not observed_sizes:
+        return "small"
+
+    required_majority = 2 if len(observed_sizes) >= 2 else 1
+    for size in ("micro", "small", "medium", "large"):
+        if counts[size] >= required_majority:
+            return size
+
+    # Ako nema većine jer nedostaje jedan kriterijum, zadrži konzervativniji rezultat.
+    ranking = {"micro": 0, "small": 1, "medium": 2, "large": 3}
+    return min(observed_sizes, key=lambda size: ranking[size])
 
 def get_operating_revenue(client_json, year):
     year = str(year)
@@ -90,12 +91,16 @@ def _to_float(value):
     if isinstance(value, (int, float)):
         return float(value)
 
-    text = str(value).strip().replace("%", "")
+    text = str(value).strip().replace("%", "").replace("\xa0", "").replace(" ", "")
     if not text:
         return None
 
     if "," in text and "." in text:
         text = text.replace(".", "").replace(",", ".")
+    elif re.fullmatch(r"[-+]?\d{1,3}(\.\d{3})+", text):
+        text = text.replace(".", "")
+    elif re.fullmatch(r"[-+]?\d{1,3}(,\d{3})+", text):
+        text = text.replace(",", "")
     elif "," in text:
         text = text.replace(",", ".")
 
