@@ -200,6 +200,9 @@ Style guidance
 - If the decision type is weak_micro_client with a calculated limit above 600,000 RSD, state: "Predlaže se konzervativan limit od 1% poslovnih prihoda."
 - If the final limit is 0, state that odloženo plaćanje nije preporučljivo i da je saradnja moguća isključivo uz avans.
 - Prefer short, dense sentences. One idea per sentence. Maximum 3 sentences per bullet.
+- Do not use contrast constructions within the same analytical statement 
+  (e.g. "ali", "međutim", "uprkos", "ne poništava").
+  Each sentence must express one clear analytical direction.
 
 Data available
 --------------
