@@ -132,7 +132,7 @@ Analyze in this order of importance:
    - Fixed assets (stalna imovina): equipment and installations are a positive signal.
    - Comment on the composition and distribution of assets.
    - Current assets: especially inventory (zalihe) and their structure (roba, proizvodi).
-  High concentration in inventory should be interpreted cautiously and must not be treated as a positive signal.
+     High concentration in inventory should be interpreted cautiously and must not be treated as a positive signal.
    - Off-balance-sheet items (vanbilansna aktiva/pasiva): large positions are a warning signal.
 
 8. DEBT-TO-ASSETS RATIO (koeficijent zaduženosti) – INFORMATIVAN, NOT DECISIVE
@@ -203,8 +203,17 @@ Style guidance
 - Do not use contrast constructions within the same analytical statement 
   (e.g. "ali", "međutim", "uprkos", "ne poništava").
   Each sentence must express one clear analytical direction.
+
   - Avoid technical or statistical terms such as "anomalija".
   Use standard business phrasing such as "značajna odstupanja", "izražene oscilacije" or "nestabilnost".
+  
+  - Avoid generic analytical phrases such as:
+  "ne menja osnovu procene", "potvrđuje potrebu za", "predstavlja osnovu za".
+  Use direct, fact-based conclusions instead.
+
+  - Avoid explanatory or defensive phrasing.
+  Do not justify or qualify statements (e.g. explaining that something "does not change the assessment").
+  State facts and implications only.
 
 Data available
 --------------
