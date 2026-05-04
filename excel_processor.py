@@ -577,16 +577,16 @@ def generate_AIcomment(prompt, key):
   client = OpenAI(api_key=key)  # Preporuka: koristi os.environ
 
   response = client.responses.create(
-      model = "gpt-5-2025-08-07",
-      input=prompt,
-      reasoning={
-          "effort": "high"
-      },
-      text={
-          "verbosity": "high"
-      },
-      max_output_tokens= 15000
-  )
+    model="gpt-5.5",
+    input=prompt,
+    reasoning={
+        "effort": "medium"
+    },
+    text={
+        "verbosity": "medium"
+    },
+    max_output_tokens=8000
+)
 
   usage = response.usage
 

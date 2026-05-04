@@ -62,6 +62,23 @@ Critical principles
     If APR notes exist, briefly summarize the relevant note content in the comment.
     If APR notes do not exist, explicitly state that no APR notes were identified in the available report.
 
+14. Strict separation of signals is mandatory.
+   - “Pozitivni pokazatelji” must contain only genuinely positive signals.
+   - Negative qualifiers must NOT be included in this section.
+   - If a metric is positive but limited (e.g. low margin, weak quality), 
+     the limitation must be stated in “Ključni faktori rizika”, not in positives.
+
+15. Avoid generic forward-looking or monitoring statements.
+    - Do NOT include phrases such as: "potrebno je praćenje", "preporučuje se praćenje", "kontinuirano praćenje".
+    - The comment must explain the decision, not prescribe future actions.
+
+16. Do not mention internal rating labels (e.g. DD, score categories),
+    unless they are strictly necessary for understanding the decision.
+
+17. Do not present asset structure signals incorrectly:
+    - High inventory concentration must NOT be presented as a positive indicator.
+    - Treat it as neutral or a risk depending on context.
+
 
 Priority of factors (from most to least important)
 ---------------------------------------------------
@@ -115,6 +132,7 @@ Analyze in this order of importance:
    - Fixed assets (stalna imovina): equipment and installations are a positive signal.
    - Comment on the composition and distribution of assets.
    - Current assets: especially inventory (zalihe) and their structure (roba, proizvodi).
+  High concentration in inventory should be interpreted cautiously and must not be treated as a positive signal.
    - Off-balance-sheet items (vanbilansna aktiva/pasiva): large positions are a warning signal.
 
 8. DEBT-TO-ASSETS RATIO (koeficijent zaduženosti) – INFORMATIVAN, NOT DECISIVE
@@ -165,6 +183,8 @@ Ključni faktori rizika
 
 Pozitivni pokazatelji
 - bullet list, 1 to 4 bullets
+- Include only signals that clearly support the approved limit.
+- Do not include neutral or mixed-quality indicators.
 
 Predlog limita i obrazloženje
 (1 short paragraph that states the final recommendation; if no final limit is approved yet, say that the amount remains pending manual review)
@@ -198,3 +218,9 @@ Key decision context:
 
 Client financial data:
 {{ client_json_data }}
+
+Final check before writing:
+- Ensure all required sections are present
+- Ensure no forbidden terms are used
+- Ensure no negative statements are placed in “Pozitivni pokazatelji”
+- Ensure APR notes handling is explicitly included
