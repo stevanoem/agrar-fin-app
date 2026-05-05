@@ -7,9 +7,6 @@ def convert_EUR(x):
   return float(x) / 117.5
 
 def company_type(zaposleni, poslovni_prihod_eur, aktiva_eur):
-    counts = {"micro": 0, "small": 0, "medium": 0, "large": 0}
-    observed_sizes = []
-
     def classify_metric(value, thresholds):
         if value is None:
             return None
@@ -18,36 +15,35 @@ def company_type(zaposleni, poslovni_prihod_eur, aktiva_eur):
                 return size
         return "large"
 
-    employee_size = classify_metric(
-        zaposleni,
-        [(10, "micro"), (50, "small"), (250, "medium")],
-    )
-    revenue_size = classify_metric(
-        poslovni_prihod_eur,
-        [(700000, "micro"), (8000000, "small"), (40000000, "medium")],
-    )
-    assets_size = classify_metric(
-        aktiva_eur,
-        [(350000, "micro"), (4000000, "small"), (20000000, "medium")],
-    )
+    # klasifikacija po svakom kriterijumu
+    sizes = [
+        classify_metric(zaposleni, [(10, "micro"), (50, "small"), (250, "medium")]),
+        classify_metric(poslovni_prihod_eur, [(700000, "micro"), (8000000, "small"), (40000000, "medium")]),
+        classify_metric(aktiva_eur, [(350000, "micro"), (4000000, "small"), (20000000, "medium")]),
+    ]
 
-    for size in (employee_size, revenue_size, assets_size):
-        if size is None:
-            continue
-        counts[size] += 1
-        observed_sizes.append(size)
+    # izbaci None
+    sizes = [s for s in sizes if s is not None]
 
-    if not observed_sizes:
-        return "small"
+    # moraš imati bar 2 kriterijuma za validno razvrstavanje
+    if len(sizes) < 2:
+        raise ValueError("Potrebna su bar 2 kriterijuma za razvrstavanje po APR pravilima")
 
-    required_majority = 2 if len(observed_sizes) >= 2 else 1
+    from collections import Counter
+    counts = Counter(sizes)
+
+    # ako neka kategorija ima ≥2 → to je rezultat
     for size in ("micro", "small", "medium", "large"):
-        if counts[size] >= required_majority:
+        if counts[size] >= 2:
             return size
 
-    # Ako nema većine jer nedostaje jedan kriterijum, zadrži konzervativniji rezultat.
+    # specijalni slučajevi kada su sva 3 različita
+    # sortiramo po rangu
     ranking = {"micro": 0, "small": 1, "medium": 2, "large": 3}
-    return min(observed_sizes, key=lambda size: ranking[size])
+    sorted_sizes = sorted(sizes, key=lambda s: ranking[s])
+
+    # srednja vrednost (medijana) → APR logika za 3 različita
+    return sorted_sizes[1]
 
 def get_operating_revenue(client_json, year):
     year = str(year)
