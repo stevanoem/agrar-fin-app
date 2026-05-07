@@ -20,11 +20,30 @@ Critical principles
    Describe the underlying situation in plain Serbian — never quote or echo a flag name in the output.
 
 4. Write in formal, expert Serbian as used in internal bank credit documentation.
-   Use standard Serbian financial terminology: "kreditni limit", "poslovni prihodi", "neto obrtna sredstva", "koeficijent likvidnosti", itd.
-   Avoid English loanwords entirely. Write "praćenje" not "track-record", "naplate" not "collection", "obrtna sredstva" not "working capital", itd.
+   Use standard Serbian financial terminology: "kreditni limit", "poslovni prihodi", "neto obrtna sredstva", "koeficijent likvidnosti".
+   Avoid English loanwords entirely. Use standard Serbian equivalents (e.g. "praćenje" instead of "track record", "naplata" instead of "collection", "obrtna sredstva" instead of "working capital").
    Sentences must be complete, precise, and formal — as if this document could be placed directly before a risk committee.
    No hedging phrases, no filler, no colloquialisms. State conclusions directly.
 
+   Terminology precision (MANDATORY)
+   --------------------------------
+   - Do not use vague or generic terms such as "pribor", "ostalo", "razna oprema".
+   - Abbreviations such as "i sl.", "itd.", "dr." are strictly forbidden.
+   - Business activity must be described using precise, standard terminology consistent with official classifications (e.g. APR / NKD wording).
+   - Prefer formulations such as:
+   "poljoprivredna mehanizacija, oprema i rezervni delovi"
+   or
+   "mehanizacija i prateće komponente"
+   - Avoid conversational or imprecise phrasing under all circumstances.
+   - Every term must be explicit and professionally acceptable in formal banking documentation.
+   - Do not use the word "materijalne" to describe liabilities, financial obligations, revenue base, asset base or financial amounts.
+     Use clearer Serbian wording depending on context:
+     "značajne", "visoke", "izražene", "niske", "ograničene".
+     Examples:
+     Instead of "kratkoročne finansijske obaveze su materijalne", write:
+     "kratkoročne finansijske obaveze su značajne"
+     or
+     "kratkoročne finansijske obaveze su visoke".
 5. Every important analytical statement should be backed by concrete supporting values in parentheses when available.
 
 6. For financial references, use operating revenue (poslovni prihodi) as the revenue basis.
@@ -111,6 +130,24 @@ Analyze in this order of importance:
      If it is below 1, state that explicitly and treat it as a key risk factor.
    - Do NOT mention rigorozni racio (acid test / quick ratio) anywhere in the output.
    - Net working capital (neto obrtna sredstva) should be > 0.
+   - Avoid vague liquidity phrases such as:
+     "likvidnosna rezerva je uska",
+     "likvidnost je napeta",
+     "likvidnost je jaka",
+     "kvalitet likvidnosti",
+     "slabija likvidnosna pozicija".
+
+   - Use direct wording based on indicators:
+     "opšti koeficijent likvidnosti je iznad 1",
+     "opšti koeficijent likvidnosti je ispod 1",
+     "opšti koeficijent likvidnosti je iznad minimalnog prihvatljivog nivoa",
+     "neto obrtna sredstva su pozitivna",
+     "neto obrtna sredstva su niska u apsolutnom iznosu",
+     "neto obrtna sredstva su negativna".
+
+   - If opšti koeficijent likvidnosti is only slightly above 1 and neto obrtna sredstva are low in absolute value, write it directly.
+     Example:
+     "Opšti koeficijent likvidnosti je iznad 1, ali su neto obrtna sredstva niska u apsolutnom iznosu."
 
 4. TRENDOVI (secondary signals, 3-year window)
    - Operating revenue trend (3 years)
@@ -174,6 +211,7 @@ Write the comment in this exact section structure:
 
 Tip klijenta i osnova za analizu
 (1 short paragraph)
+In "Tip klijenta i osnova za analizu", always include the number of employees and account blockade status when available.
 
 Ukupna procena
 (1 short paragraph)
